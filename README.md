@@ -30,3 +30,4 @@ This crate builds upon the fantastic work of the following projects:
   * [Dear ImGui](https://github.com/ocornut/imgui)
   * [imgui-rs](https://github.com/imgui-rs/imgui-rs)
   * [imgui-wgpu-rs](https://github.com/Yatekii/imgui-wgpu-rs)
+  * [Bevy](https://github.com/bevyengine/bevy)
