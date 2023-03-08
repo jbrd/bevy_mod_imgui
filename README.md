@@ -2,7 +2,7 @@
 
 A Dear ImGui integration for the Bevy game engine.
 
-![bevy_imgui screenshot](media\screenshot.png)
+![bevy_imgui screenshot](media/screenshot.png)
 
 ## Current Status
 
