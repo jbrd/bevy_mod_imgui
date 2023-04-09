@@ -2,6 +2,8 @@
 
 A Dear ImGui integration for the Bevy game engine.
 
+![Build Status](https://github.com/jbrd/bevy_imgui/actions/workflows/rust.yml/badge.svg)
+
 ![bevy_imgui screenshot](media/screenshot.png)
 
 ## Current Status
