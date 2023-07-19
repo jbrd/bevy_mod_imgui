@@ -21,6 +21,12 @@ If you're interested in playing with this crate, I'd be keen to hear your though
 
 If there is a large enough appetite for this crate, I may consider taking it further...
 
+## Compatibility Table
+
+|`bevy_imgui`|`bevy`  |`wgpu`  |`imgui` |`imgui-wgpu`|
+|------------|--------|--------|--------|------------|
+| 0.1.0      | 0.11.* | 0.16.* | 0.11.* | 0.23.*     |
+
 ## Contributors
 
 * James Bird (jbrd)
