@@ -12,15 +12,15 @@ fn main() {
         .insert_resource(ImguiState {
             demo_window_open: true,
         })
-        .add_startup_system(setup)
         .add_plugins(DefaultPlugins)
-        .add_plugin(bevy_imgui::ImguiPlugin {
+        .add_systems(Startup, setup)
+        .add_plugins(bevy_imgui::ImguiPlugin {
             ini_filename: Some("hello-world.ini".into()),
             font_oversample_h: 2,
             font_oversample_v: 2,
             ..default()
         })
-        .add_system_to_stage(CoreStage::PostUpdate, imgui_example_ui);
+        .add_systems(PostUpdate, imgui_example_ui);
 
     app.run();
 }
@@ -32,7 +32,10 @@ fn setup(
 ) {
     // plane
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 5.0 })),
+        mesh: meshes.add(Mesh::from(shape::Plane {
+            size: 5.0,
+            subdivisions: 1,
+        })),
         material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
         ..default()
     });
@@ -64,8 +67,8 @@ fn imgui_example_ui(mut context: NonSendMut<ImguiContext>, mut state: ResMut<Img
     let ui = context.ui();
     let window = ui.window("Hello world");
     window
-        .size([300.0, 100.0], Condition::FirstUseEver)
-        .position([0.0, 0.0], Condition::FirstUseEver)
+        .size([300.0, 100.0], imgui::Condition::FirstUseEver)
+        .position([0.0, 0.0], imgui::Condition::FirstUseEver)
         .build(|| {
             ui.text("Hello world!");
             ui.text("This...is...bevy_imgui!");

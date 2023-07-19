@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = "0.9.1"
-imgui = "0.9.0"
-imgui-wgpu = "0.21.0" # cannot update to 0.22.0 until bevy is updated (so that wgpu is updated to 0.15)
-wgpu = "0.14.*"
+bevy = "0.11.0"
+imgui = "0.11.0"
+imgui-wgpu = "0.23.0"
+wgpu = "0.16.0"
