@@ -20,7 +20,7 @@ fn main() {
             font_oversample_v: 2,
             ..default()
         })
-        .add_systems(PostUpdate, imgui_example_ui);
+        .add_systems(Update, imgui_example_ui);
 
     app.run();
 }
