@@ -16,7 +16,7 @@ use std::{
     ptr::null_mut,
     sync::{Arc, Mutex},
 };
-use wgpu::{CommandEncoder, RenderPass, RenderPassDescriptor};
+use wgpu::{CommandEncoder, RenderPass, RenderPassDescriptor, TextureFormat};
 
 pub struct ImguiContext {
     ctx: Arc<Mutex<imgui::Context>>,
@@ -112,6 +112,7 @@ pub struct ImguiPlugin {
     pub font_oversample_v: i32,
     pub apply_display_scale_to_font_size: bool,
     pub apply_display_scale_to_font_oversample: bool,
+    pub texture_format: TextureFormat
 }
 
 impl Default for ImguiPlugin {
@@ -123,6 +124,7 @@ impl Default for ImguiPlugin {
             font_oversample_v: 1,
             apply_display_scale_to_font_size: true,
             apply_display_scale_to_font_oversample: true,
+            texture_format: TextureFormat::Bgra8UnormSrgb
         }
     }
 }
@@ -178,7 +180,7 @@ impl Plugin for ImguiPlugin {
                     device.wgpu_device(),
                     queue,
                     imgui_wgpu::RendererConfig {
-                        texture_format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                        texture_format: self.texture_format,
                         ..default()
                     },
                 );
