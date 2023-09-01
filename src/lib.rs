@@ -257,7 +257,7 @@ fn imgui_new_frame_system(
     mouse: Res<Input<bevy::input::mouse::MouseButton>>,
     mut received_chars: EventReader<ReceivedCharacter>,
     mut mouse_wheel: EventReader<bevy::input::mouse::MouseWheel>,
-    mut scale_events: EventReader<WindowScaleFactorChanged>
+    mut scale_events: EventReader<WindowScaleFactorChanged>,
 ) {
     const IMGUI_TO_BEVY_KEYS: [bevy::input::keyboard::KeyCode; imgui::Key::COUNT] = [
         KeyCode::Tab,
