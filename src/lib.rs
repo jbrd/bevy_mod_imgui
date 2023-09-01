@@ -6,7 +6,7 @@ use bevy::{
         view::ExtractedWindows,
         RenderApp,
     },
-    window::PrimaryWindow,
+    window::{PrimaryWindow, WindowScaleFactorChanged},
 };
 use imgui::{FontSource, OwnedDrawData};
 use imgui_wgpu::Renderer;
@@ -252,11 +252,12 @@ impl Plugin for ImguiPlugin {
 
 fn imgui_new_frame_system(
     mut context: NonSendMut<ImguiContext>,
-    primary_window: Query<&Window, With<PrimaryWindow>>,
+    primary_window: Query<(Entity, &Window), With<PrimaryWindow>>,
     keyboard: Res<Input<KeyCode>>,
     mouse: Res<Input<bevy::input::mouse::MouseButton>>,
     mut received_chars: EventReader<ReceivedCharacter>,
     mut mouse_wheel: EventReader<bevy::input::mouse::MouseWheel>,
+    mut scale_events: EventReader<WindowScaleFactorChanged>,
 ) {
     const IMGUI_TO_BEVY_KEYS: [bevy::input::keyboard::KeyCode; imgui::Key::COUNT] = [
         KeyCode::Tab,
@@ -401,6 +402,16 @@ fn imgui_new_frame_system(
         KeyCode::Unlabeled, // ReservedForModSuper = sys::ImGuiKey_ReservedForModSuper
     ];
 
+    for WindowScaleFactorChanged {
+        window,
+        scale_factor,
+    } in scale_events.iter()
+    {
+        if primary_window.get_single().unwrap().0 == *window {
+            context.display_scale = *scale_factor as f32;
+        }
+    }
+
     let ui_ptr: *mut imgui::Ui;
     let display_scale = context.display_scale;
     let font_scale = context.font_scale;
@@ -408,7 +419,7 @@ fn imgui_new_frame_system(
         let mut ctx = context.ctx.lock().unwrap();
         let io = ctx.io_mut();
 
-        let Ok(primary) = primary_window.get_single() else {
+        let Ok((_, primary)) = primary_window.get_single() else {
             return;
         };
 
