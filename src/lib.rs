@@ -2,21 +2,25 @@ use bevy::{
     ecs::system::SystemState,
     prelude::*,
     render::{
-        render_graph::{Node, RenderGraph},
+        render_graph::{Node, NodeRunError, RenderGraph, RenderGraphContext},
+        renderer::{RenderContext, RenderDevice, RenderQueue},
         view::ExtractedWindows,
         RenderApp,
     },
     window::{PrimaryWindow, WindowScaleFactorChanged},
 };
 use imgui::{FontSource, OwnedDrawData};
-use imgui_wgpu::Renderer;
+use imgui_wgpu::{Renderer, RendererConfig};
 use std::{
     cell::RefCell,
     path::PathBuf,
     ptr::null_mut,
     sync::{Arc, Mutex},
 };
-use wgpu::{CommandEncoder, RenderPass, RenderPassDescriptor};
+use wgpu::{
+    CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachment,
+    RenderPassDescriptor, TextureFormat,
+};
 
 pub struct ImguiContext {
     ctx: Arc<Mutex<imgui::Context>>,
@@ -35,6 +39,7 @@ impl ImguiContext {
 struct ImguiRenderContext {
     ctx: Arc<Mutex<imgui::Context>>,
     renderer: RefCell<Renderer>,
+    texture_format: TextureFormat,
     draw: imgui::OwnedDrawData,
 }
 
@@ -64,11 +69,11 @@ impl ImGuiNode {
 
         Ok(command_encoder.begin_render_pass(&RenderPassDescriptor {
             label: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            color_attachments: &[Some(RenderPassColorAttachment {
                 view: swap_chain_texture_view,
                 resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
+                ops: Operations {
+                    load: LoadOp::Load,
                     store: true,
                 },
             })],
@@ -80,17 +85,13 @@ impl ImGuiNode {
 impl Node for ImGuiNode {
     fn run(
         &self,
-        _graph: &mut bevy::render::render_graph::RenderGraphContext,
-        render_context: &mut bevy::render::renderer::RenderContext,
+        _graph: &mut RenderGraphContext,
+        render_context: &mut RenderContext,
         world: &World,
-    ) -> Result<(), bevy::render::render_graph::NodeRunError> {
+    ) -> Result<(), NodeRunError> {
         let context = world.resource::<ImguiRenderContext>();
-        let queue = world
-            .get_resource::<bevy::render::renderer::RenderQueue>()
-            .unwrap();
-        let render_device = world
-            .get_resource::<bevy::render::renderer::RenderDevice>()
-            .unwrap();
+        let queue = world.get_resource::<RenderQueue>().unwrap();
+        let render_device = world.get_resource::<RenderDevice>().unwrap();
         let command_encoder = render_context.command_encoder();
         let wgpu_device = render_device.wgpu_device();
         let mut renderer = context.renderer.borrow_mut();
@@ -167,21 +168,21 @@ impl Plugin for ImguiPlugin {
 
         let ctx_arc = match app.get_sub_app_mut(RenderApp) {
             Ok(render_app) => {
-                let device = render_app
-                    .world
-                    .resource::<bevy::render::renderer::RenderDevice>();
-                let queue = render_app
-                    .world
-                    .resource::<bevy::render::renderer::RenderQueue>();
-                let renderer = Renderer::new(
-                    &mut ctx,
-                    device.wgpu_device(),
-                    queue,
-                    imgui_wgpu::RendererConfig {
-                        texture_format: wgpu::TextureFormat::Bgra8UnormSrgb,
-                        ..default()
-                    },
-                );
+                let device = render_app.world.resource::<RenderDevice>();
+                let queue = render_app.world.resource::<RenderQueue>();
+
+                // Here we create a new ImGui renderer with a default format. At this point,
+                // we don't know what format the window surface is going to be set up with,
+                // and yet we need to initialise the renderer so that the texture glyphs
+                // are created before new_frame is called on the imgui context.
+                //
+                // This will give us a functonal imgui context. If, at the point at which we
+                // extract the scene, we realise that the window has an incompatible
+                // format, the renderer will be recreated with a compatible format.
+                let renderer_config = RendererConfig::default();
+                let texture_format = renderer_config.texture_format;
+                let renderer =
+                    Renderer::new(&mut ctx, device.wgpu_device(), queue, renderer_config);
 
                 let mut graph = render_app.world.resource_mut::<RenderGraph>();
 
@@ -227,6 +228,7 @@ impl Plugin for ImguiPlugin {
                 render_app.insert_resource(ImguiRenderContext {
                     ctx: arc.clone(),
                     renderer: RefCell::new(renderer),
+                    texture_format,
                     draw: OwnedDrawData::default(),
                 });
 
@@ -460,12 +462,46 @@ fn imgui_new_frame_system(
     context.ui = ui_ptr;
 }
 
-fn imgui_extract_frame_system(mut context: ResMut<ImguiRenderContext>) {
-    context.draw = {
+fn imgui_extract_frame_system(
+    mut context: ResMut<ImguiRenderContext>,
+    extracted_windows: ResMut<ExtractedWindows>,
+    device: Res<RenderDevice>,
+    queue: ResMut<RenderQueue>,
+) {
+    // End the imgui frame.
+    let owned_draw_data = {
         let mut ctx = context.ctx.lock().unwrap();
         let draw_data = ctx.render();
         OwnedDrawData::from(draw_data)
     };
+
+    // We've now recorded the draw data for the current frame, and this should be renderer agnostic.
+    // So at this point, we can check to see whether the texture format of the target window matches
+    // the renderer's texture format. If it doesn't, we recreate the Renderer here before we proceed
+    // to render the frame.
+    context.draw = OwnedDrawData::default();
+
+    let Some(primary) = extracted_windows.primary else {
+        return;
+    };
+    let extracted_window = &extracted_windows.windows[&primary];
+    let Some(texture_format) = extracted_window.swap_chain_texture_format else {
+        return;
+    };
+    if texture_format != context.texture_format {
+        let renderer_config = RendererConfig {
+            texture_format,
+            ..default()
+        };
+        context.renderer.swap(&RefCell::new(Renderer::new(
+            &mut context.ctx.lock().unwrap(),
+            device.wgpu_device(),
+            &queue,
+            renderer_config,
+        )));
+        context.texture_format = texture_format;
+    }
+    context.draw = owned_draw_data;
 }
 
 pub mod prelude {
