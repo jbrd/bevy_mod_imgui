@@ -248,7 +248,7 @@ impl Plugin for ImguiPlugin {
             font_scale: self.apply_display_scale_to_font_size,
         });
 
-        app.add_systems(Update, imgui_new_frame_system);
+        app.add_systems(PreUpdate, imgui_new_frame_system);
     }
 }
 
