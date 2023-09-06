@@ -29,7 +29,8 @@ If there is a large enough appetite for this crate, I may consider taking it fur
 
 ## Contributors
 
-* James Bird (jbrd)
+* James Bird (@jbrd)
+* @nhlest
 
 ## Acknowledgements
 
