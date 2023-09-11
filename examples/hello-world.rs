@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_imgui::prelude::*;
+use bevy_mod_imgui::prelude::*;
 
 #[derive(Resource)]
 struct ImguiState {
@@ -14,7 +14,7 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
-        .add_plugins(bevy_imgui::ImguiPlugin {
+        .add_plugins(bevy_mod_imgui::ImguiPlugin {
             ini_filename: Some("hello-world.ini".into()),
             font_oversample_h: 2,
             font_oversample_v: 2,
@@ -71,7 +71,7 @@ fn imgui_example_ui(mut context: NonSendMut<ImguiContext>, mut state: ResMut<Img
         .position([0.0, 0.0], imgui::Condition::FirstUseEver)
         .build(|| {
             ui.text("Hello world!");
-            ui.text("This...is...bevy_imgui!");
+            ui.text("This...is...bevy_mod_imgui!");
             ui.separator();
             let mouse_pos = ui.io().mouse_pos;
             ui.text(format!(
