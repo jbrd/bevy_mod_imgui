@@ -1,10 +1,10 @@
-# bevy_imgui
+# bevy_mod_imgui
 
 A Dear ImGui integration for the Bevy game engine.
 
-![Build Status](https://github.com/jbrd/bevy_imgui/actions/workflows/rust.yml/badge.svg)
+![Build Status](https://github.com/jbrd/bevy_mod_imgui/actions/workflows/rust.yml/badge.svg)
 
-![bevy_imgui screenshot](media/screenshot.png)
+![bevy_mod_imgui screenshot](media/screenshot.png)
 
 ## Current Status
 
@@ -13,7 +13,7 @@ quickly to get something up and running for some personal projects.
 
 This crate has only been tested on Windows (DX12 and Vulcan).
 
-For these reasons, this crate currently isn't published. In fact, the `bevy_imgui` crate name has been reserved by the developers of Bevy, and this crate is not related to any official Bevy repository in any way.
+This crate is not related to any official Bevy organisation repository in any way.
 
 ## Feedback Saught
 
@@ -23,9 +23,9 @@ If there is a large enough appetite for this crate, I may consider taking it fur
 
 ## Compatibility Table
 
-|`bevy_imgui`|`bevy`  |`wgpu`  |`imgui` |`imgui-wgpu`|
-|------------|--------|--------|--------|------------|
-| 0.1.0      | 0.11.* | 0.16.* | 0.11.* | 0.23.*     |
+|`bevy_mod_imgui`|`bevy`  |`wgpu`  |`imgui` |`imgui-wgpu`|
+|----------------|--------|--------|--------|------------|
+| 0.1.0          | 0.11.* | 0.16.* | 0.11.* | 0.23.*     |
 
 ## Contributors
 
