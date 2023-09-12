@@ -40,3 +40,10 @@ This crate builds upon the fantastic work of the following projects:
   * [imgui-rs](https://github.com/imgui-rs/imgui-rs)
   * [imgui-wgpu-rs](https://github.com/Yatekii/imgui-wgpu-rs)
   * [Bevy](https://github.com/bevyengine/bevy)
+
+## License
+
+All code in this repository is permissively dual-licensed under:
+
+* MIT License - [LICENSE-MIT](LICENSE-MIT)
+* Apache License, Version 2.0 - [LICENSE-APACHE](LICENSE-APACHE)
