@@ -30,4 +30,4 @@ jobs:
     - name: Run clippy
       run: cargo clippy --workspace --all-targets
     - name: Run doc
-      run: cargo doc
+      run: cargo doc --no-deps
