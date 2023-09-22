@@ -1,3 +1,39 @@
+//! A Dear ImGui integration for the Bevy game engine.
+//!
+//! # Minimal Example
+//!
+//! ```no_run
+//! use bevy::prelude::*;
+//! use bevy_mod_imgui::prelude::*;
+//!
+//! #[derive(Resource)]
+//! struct ImguiState {
+//!     demo_window_open: bool,
+//! }
+//!
+//! fn main() {
+//!     let mut app = App::new();
+//!     app.insert_resource(ClearColor(Color::rgba(0.2, 0.2, 0.2, 1.0)))
+//!         .insert_resource(ImguiState {
+//!             demo_window_open: true,
+//!         })
+//!         .add_plugins(DefaultPlugins)
+//!         .add_plugins(bevy_mod_imgui::ImguiPlugin::default())
+//!         .add_systems(Startup, |mut commands: Commands| {
+//!             commands.spawn(Camera3dBundle::default());
+//!         })
+//!         .add_systems(Update, imgui_example_ui);
+//!     app.run();
+//! }
+//!
+//! fn imgui_example_ui(mut context: NonSendMut<ImguiContext>, mut state: ResMut<ImguiState>) {
+//!     let ui = context.ui();
+//!     if state.demo_window_open {
+//!         ui.show_demo_window(&mut state.demo_window_open);
+//!     }
+//! }
+//! ```
+
 use bevy::{
     ecs::system::SystemState,
     prelude::*,
@@ -22,6 +58,12 @@ use wgpu::{
     RenderPassDescriptor, TextureFormat,
 };
 
+/// The ImGui context resource.
+///
+/// This should be added to your Bevy app as a `NonSendMut` resource (as it is not thread safe).
+///
+/// You can use this object to obtain a reference to the underlying `imgui::Ui` object for submitting
+/// UI elements to imgui. This should be done during the Update and PostUpdate phase only.
 pub struct ImguiContext {
     ctx: Arc<Mutex<imgui::Context>>,
     ui: *mut imgui::Ui,
@@ -30,6 +72,9 @@ pub struct ImguiContext {
 }
 
 impl ImguiContext {
+    /// Provides mutable access to the underlying `imgui::Ui` object.
+    ///
+    /// Use this to submit UI elements to imgui.
     pub fn ui(&mut self) -> &mut imgui::Ui {
         unsafe { &mut *self.ui }
     }
@@ -106,12 +151,25 @@ impl Node for ImGuiNode {
     }
 }
 
+/// Configuration settings for this plugin.
 pub struct ImguiPlugin {
+    /// Sets the path to the ini file (default is "imgui.ini").
+    /// Pass None to disable automatic .Ini saving
     pub ini_filename: Option<PathBuf>,
+
+    /// The unscaled font size to use (default is 13).
     pub font_size: f32,
+
+    /// The number of horizontal font samples to perform. Must be >= 1 (default is 1).
     pub font_oversample_h: i32,
+
+    /// The number of vertical font samples to perform. Must be >= 1 (default is 1).
     pub font_oversample_v: i32,
+
+    /// Whether to apply the window display scale to the font size (default is true).
     pub apply_display_scale_to_font_size: bool,
+
+    /// Whether to apply the window display scale to the number of font samples (default is true).
     pub apply_display_scale_to_font_oversample: bool,
 }
 
