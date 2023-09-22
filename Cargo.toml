@@ -3,6 +3,11 @@ name = "bevy_mod_imgui"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+categories = ["game-engines", "graphics", "gui", "rendering"]
+description = "A Dear ImGui integration for the Bevy game engine."
+readme = "README.md"
+repository = "https://github.com/jbrd/bevy_mod_imgui"
+rust-version = "1.70.0"
 
 [dependencies]
 bevy = "0.11.0"
