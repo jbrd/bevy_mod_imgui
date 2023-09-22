@@ -2,7 +2,7 @@
 //!
 //! # Minimal Example
 //!
-//! ```rust
+//! ```no_run
 //! use bevy::prelude::*;
 //! use bevy_mod_imgui::prelude::*;
 //!
