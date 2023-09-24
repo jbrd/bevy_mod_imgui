@@ -1,8 +1,11 @@
 # bevy_mod_imgui
 
-A Dear ImGui integration for the Bevy game engine.
-
+![Crates.io](https://img.shields.io/crates/v/bevy_mod_imgui)
+![Crates.io](https://img.shields.io/crates/l/bevy_mod_imgui)
 ![Build Status](https://github.com/jbrd/bevy_mod_imgui/actions/workflows/rust.yml/badge.svg)
+![docs.rs](https://img.shields.io/docsrs/bevy_mod_imgui)
+
+A Dear ImGui integration for the Bevy game engine.
 
 ![bevy_mod_imgui screenshot](media/screenshot.png)
 
