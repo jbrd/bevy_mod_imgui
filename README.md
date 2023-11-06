@@ -28,8 +28,13 @@ If there is a large enough appetite for this crate, I may consider taking it fur
 
 |`bevy_mod_imgui`|`bevy`  |`wgpu`  |`imgui` |`imgui-wgpu`|
 |----------------|--------|--------|--------|------------|
-| 0.1.0          | 0.11.* | 0.16.* | 0.11.* | 0.23.*     |
 | 0.2.0          | 0.12.* | 0.17.1 | 0.11.* | 0.24.*     |
+| 0.1.0          | 0.11.* | 0.16.* | 0.11.* | 0.23.*     |
+
+## Changelog
+
+* `0.2.0` - Updated dependencies for Bevy `0.12.0`
+* `0.1.0` - Initial crate publish
 
 ## Contributors
 
