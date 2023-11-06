@@ -465,7 +465,7 @@ fn imgui_new_frame_system(
     for WindowScaleFactorChanged {
         window,
         scale_factor,
-    } in scale_events.iter()
+    } in scale_events.read()
     {
         if primary_window.get_single().unwrap().0 == *window {
             context.display_scale = *scale_factor as f32;
@@ -495,7 +495,7 @@ fn imgui_new_frame_system(
         io.mouse_down[1] = mouse.pressed(bevy::input::mouse::MouseButton::Right);
         io.mouse_down[2] = mouse.pressed(bevy::input::mouse::MouseButton::Middle);
 
-        for e in received_chars.iter() {
+        for e in received_chars.read() {
             io.add_input_character(e.char);
         }
 
@@ -511,7 +511,7 @@ fn imgui_new_frame_system(
         io.key_super =
             keyboard.pressed(KeyCode::SuperLeft) || keyboard.pressed(KeyCode::SuperRight);
 
-        for e in mouse_wheel.iter() {
+        for e in mouse_wheel.read() {
             io.mouse_wheel = e.y;
             io.mouse_wheel_h = e.x;
         }
