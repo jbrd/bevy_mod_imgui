@@ -11,7 +11,7 @@ rust-version = "1.70.0"
 exclude = [".github/", ".gitignore"]
 
 [dependencies]
-bevy = "0.11.0"
+bevy = "0.12.0"
 imgui = "0.11.0"
-imgui-wgpu = "0.23.0"
-wgpu = "0.16.0"
+imgui-wgpu = "0.24.0"
+wgpu = "0.17.1"
