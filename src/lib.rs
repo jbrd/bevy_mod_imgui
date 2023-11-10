@@ -542,7 +542,9 @@ fn imgui_extract_frame_system(
     let Some(primary) = extracted_windows.primary else {
         return;
     };
-    let extracted_window = &extracted_windows.windows[&primary];
+    let Some(extracted_window) = extracted_windows.windows.get(&primary) else {
+        return;
+    };
     let Some(texture_format) = extracted_window.swap_chain_texture_format else {
         return;
     };
