@@ -30,6 +30,11 @@ If there is a large enough appetite for this crate, I may consider taking it fur
 |----------------|--------|--------|--------|------------|
 | 0.1.*          | 0.11.* | 0.16.* | 0.11.* | 0.23.*     |
 
+## Changelog
+
+* `0.1.1` - Fix Issue #20 - unchecked window lookup which could cause panic during exit (backported from `0.2.1`)
+* `0.1.0` - Initial crate publish
+
 ## Contributors
 
 * James Bird (@jbrd)
