@@ -28,7 +28,7 @@ If there is a large enough appetite for this crate, I may consider taking it fur
 
 |`bevy_mod_imgui`|`bevy`  |`wgpu`  |`imgui` |`imgui-wgpu`|
 |----------------|--------|--------|--------|------------|
-| 0.1.0          | 0.11.* | 0.16.* | 0.11.* | 0.23.*     |
+| 0.1.*          | 0.11.* | 0.16.* | 0.11.* | 0.23.*     |
 
 ## Contributors
 
