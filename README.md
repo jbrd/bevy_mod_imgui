@@ -33,7 +33,9 @@ If there is a large enough appetite for this crate, I may consider taking it fur
 
 ## Changelog
 
+* `0.2.1` - Fix Issue #20 - unchecked window lookup which could cause panic during exit
 * `0.2.0` - Updated dependencies for Bevy `0.12.0`
+* `0.1.1` - Fix Issue #20 - unchecked window lookup which could cause panic during exit (backported from `0.2.1`)
 * `0.1.0` - Initial crate publish
 
 ## Contributors
