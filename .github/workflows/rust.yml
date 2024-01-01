@@ -28,6 +28,6 @@ jobs:
     - name: Run format checks
       run: cargo fmt --all -- --check
     - name: Run clippy
-      run: cargo clippy --workspace --all-targets
+      run: cargo clippy --workspace --all-targets -- -Dwarnings
     - name: Run doc
       run: cargo doc --no-deps
