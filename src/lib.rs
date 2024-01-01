@@ -47,12 +47,7 @@ use bevy::{
 };
 use imgui::{FontSource, OwnedDrawData};
 use imgui_wgpu::{Renderer, RendererConfig};
-use std::{
-    cell::RefCell,
-    path::PathBuf,
-    ptr::null_mut,
-    sync::{Arc, Mutex},
-};
+use std::{cell::RefCell, path::PathBuf, ptr::null_mut, rc::Rc, sync::Mutex};
 use wgpu::{
     CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachment,
     RenderPassDescriptor, TextureFormat,
@@ -65,7 +60,7 @@ use wgpu::{
 /// You can use this object to obtain a reference to the underlying `imgui::Ui` object for submitting
 /// UI elements to imgui. This should be done during the Update and PostUpdate phase only.
 pub struct ImguiContext {
-    ctx: Arc<Mutex<imgui::Context>>,
+    ctx: Rc<Mutex<imgui::Context>>,
     ui: *mut imgui::Ui,
     display_scale: f32,
     font_scale: bool,
@@ -82,7 +77,7 @@ impl ImguiContext {
 
 #[derive(Resource)]
 struct ImguiRenderContext {
-    ctx: Arc<Mutex<imgui::Context>>,
+    ctx: Rc<Mutex<imgui::Context>>,
     renderer: RefCell<Renderer>,
     texture_format: TextureFormat,
     draw: imgui::OwnedDrawData,
@@ -224,7 +219,7 @@ impl Plugin for ImguiPlugin {
             ctx.io_mut()[imgui::Key::VARIANTS[key_index]] = key_index as _;
         }
 
-        let ctx_arc = match app.get_sub_app_mut(RenderApp) {
+        let ctx_rc = match app.get_sub_app_mut(RenderApp) {
             Ok(render_app) => {
                 let device = render_app.world.resource::<RenderDevice>();
                 let queue = render_app.world.resource::<RenderQueue>();
@@ -282,9 +277,9 @@ impl Plugin for ImguiPlugin {
                     );
                 }
 
-                let arc = Arc::new(Mutex::new(ctx));
+                let rc = Rc::new(Mutex::new(ctx));
                 render_app.insert_resource(ImguiRenderContext {
-                    ctx: arc.clone(),
+                    ctx: rc.clone(),
                     renderer: RefCell::new(renderer),
                     texture_format,
                     draw: OwnedDrawData::default(),
@@ -292,7 +287,7 @@ impl Plugin for ImguiPlugin {
 
                 render_app.add_systems(ExtractSchedule, imgui_extract_frame_system);
 
-                arc
+                rc
             }
             _ => {
                 return;
@@ -300,7 +295,7 @@ impl Plugin for ImguiPlugin {
         };
 
         app.insert_non_send_resource(ImguiContext {
-            ctx: ctx_arc,
+            ctx: ctx_rc,
             ui: null_mut(),
             display_scale,
             font_scale: self.apply_display_scale_to_font_size,
