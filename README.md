@@ -28,6 +28,7 @@ If there is a large enough appetite for this crate, I may consider taking it fur
 
 |`bevy_mod_imgui`|`bevy`  |`wgpu`  |`imgui` |`imgui-wgpu`|
 |----------------|--------|--------|--------|------------|
+| 0.3.* (NEXT)   | 0.13.* | 0.19.* | TBC    | TBC        |
 | 0.2.*          | 0.12.* | 0.17.1 | 0.11.* | 0.24.*     |
 | 0.1.*          | 0.11.* | 0.16.* | 0.11.* | 0.23.*     |
 
