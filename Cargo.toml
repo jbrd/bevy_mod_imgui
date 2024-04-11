@@ -11,7 +11,12 @@ rust-version = "1.70.0"
 exclude = [".github/", ".gitignore"]
 
 [dependencies]
-bevy = "0.12.0"
+bevy = "0.13.0"
 imgui = "0.11.0"
-imgui-wgpu = "0.24.0"
-wgpu = "0.17.1"
+wgpu = "0.19.3"
+
+# For imgui_wgpu_rs_local
+# imgui-wgpu = "0.24.0" # temporarily bundling imgui-wgpu with this crate
+bytemuck = "1"
+log = "0.4"
+smallvec = "1"

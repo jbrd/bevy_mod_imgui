@@ -35,10 +35,12 @@
 //! ```
 
 use bevy::{
+    core_pipeline::core_2d::graph::{Core2d, Node2d},
+    core_pipeline::core_3d::graph::{Core3d, Node3d},
     ecs::system::SystemState,
     prelude::*,
     render::{
-        render_graph::{Node, NodeRunError, RenderGraph, RenderGraphContext},
+        render_graph::{Node, NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel},
         renderer::{RenderContext, RenderDevice, RenderQueue},
         view::ExtractedWindows,
         RenderApp,
@@ -46,11 +48,12 @@ use bevy::{
     window::{PrimaryWindow, WindowScaleFactorChanged},
 };
 use imgui::{FontSource, OwnedDrawData};
-use imgui_wgpu::{Renderer, RendererConfig};
+mod imgui_wgpu_rs_local;
+use imgui_wgpu_rs_local::{Renderer, RendererConfig};
 use std::{cell::RefCell, path::PathBuf, ptr::null_mut, rc::Rc, sync::Mutex};
 use wgpu::{
     CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachment,
-    RenderPassDescriptor, TextureFormat,
+    RenderPassDescriptor, StoreOp, TextureFormat,
 };
 
 /// The ImGui context resource.
@@ -86,6 +89,9 @@ struct ImguiRenderContext {
 unsafe impl Send for ImguiRenderContext {}
 unsafe impl Sync for ImguiRenderContext {}
 
+#[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
+pub struct ImGuiNodeLabel;
+
 struct ImGuiNode;
 
 impl ImGuiNode {
@@ -97,8 +103,9 @@ impl ImGuiNode {
         let Some(primary) = extracted_windows.primary else {
             return Err(()); // No primary window
         };
-        let extracted_window = &extracted_windows.windows[&primary];
-
+        let Some(extracted_window) = extracted_windows.windows.get(&primary) else {
+            return Err(()); // No primary window
+        };
         let swap_chain_texture_view = if let Some(swap_chain_texture_view) =
             extracted_window.swap_chain_texture_view.as_ref()
         {
@@ -114,10 +121,11 @@ impl ImGuiNode {
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Load,
-                    store: true,
+                    store: StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: None,
+            ..Default::default()
         }))
     }
 }
@@ -143,6 +151,12 @@ impl Node for ImGuiNode {
             }
         }
         Ok(())
+    }
+}
+
+impl FromWorld for ImGuiNode {
+    fn from_world(_world: &mut World) -> ImGuiNode {
+        ImGuiNode {}
     }
 }
 
@@ -189,7 +203,7 @@ impl Plugin for ImguiPlugin {
             let mut system_state: SystemState<Query<&Window, With<PrimaryWindow>>> =
                 SystemState::new(&mut app.world);
             let primary_window = system_state.get(&app.world);
-            primary_window.get_single().unwrap().scale_factor() as f32
+            primary_window.get_single().unwrap().scale_factor()
         };
 
         let font_scale = if self.apply_display_scale_to_font_size {
@@ -237,45 +251,27 @@ impl Plugin for ImguiPlugin {
                 let renderer =
                     Renderer::new(&mut ctx, device.wgpu_device(), queue, renderer_config);
 
-                let mut graph = render_app.world.resource_mut::<RenderGraph>();
+                render_app.add_render_graph_node::<ImGuiNode>(Core2d, ImGuiNodeLabel);
 
-                if let Some(graph_2d) =
-                    graph.get_sub_graph_mut(bevy::core_pipeline::core_2d::graph::NAME)
-                {
-                    let imgui_node = ImGuiNode;
-                    graph_2d.add_node("imgui", imgui_node);
-                    graph_2d.add_node_edge(
-                        bevy::core_pipeline::core_2d::graph::node::MAIN_PASS,
-                        "imgui",
-                    );
-                    graph_2d.add_node_edge(
-                        bevy::core_pipeline::core_2d::graph::node::END_MAIN_PASS_POST_PROCESSING,
-                        "imgui",
-                    );
-                    graph_2d.add_node_edge(
-                        bevy::core_pipeline::core_2d::graph::node::UPSCALING,
-                        "imgui",
-                    );
-                }
+                render_app.add_render_graph_edges(Core2d, (Node2d::MainPass, ImGuiNodeLabel));
 
-                if let Some(graph_3d) =
-                    graph.get_sub_graph_mut(bevy::core_pipeline::core_3d::graph::NAME)
-                {
-                    let imgui_node = ImGuiNode;
-                    graph_3d.add_node("imgui", imgui_node);
-                    graph_3d.add_node_edge(
-                        bevy::core_pipeline::core_3d::graph::node::END_MAIN_PASS,
-                        "imgui",
-                    );
-                    graph_3d.add_node_edge(
-                        bevy::core_pipeline::core_3d::graph::node::END_MAIN_PASS_POST_PROCESSING,
-                        "imgui",
-                    );
-                    graph_3d.add_node_edge(
-                        bevy::core_pipeline::core_3d::graph::node::UPSCALING,
-                        "imgui",
-                    );
-                }
+                render_app.add_render_graph_edges(
+                    Core2d,
+                    (Node2d::EndMainPassPostProcessing, ImGuiNodeLabel),
+                );
+
+                render_app.add_render_graph_edges(Core2d, (Node2d::Upscaling, ImGuiNodeLabel));
+
+                render_app.add_render_graph_node::<ImGuiNode>(Core3d, ImGuiNodeLabel);
+
+                render_app.add_render_graph_edges(Core3d, (Node3d::EndMainPass, ImGuiNodeLabel));
+
+                render_app.add_render_graph_edges(
+                    Core3d,
+                    (Node3d::EndMainPassPostProcessing, ImGuiNodeLabel),
+                );
+
+                render_app.add_render_graph_edges(Core3d, (Node3d::Upscaling, ImGuiNodeLabel));
 
                 let rc = Rc::new(Mutex::new(ctx));
                 render_app.insert_resource(ImguiRenderContext {
@@ -308,27 +304,28 @@ impl Plugin for ImguiPlugin {
 fn imgui_new_frame_system(
     mut context: NonSendMut<ImguiContext>,
     primary_window: Query<(Entity, &Window), With<PrimaryWindow>>,
-    keyboard: Res<Input<KeyCode>>,
-    mouse: Res<Input<bevy::input::mouse::MouseButton>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mouse: Res<ButtonInput<bevy::input::mouse::MouseButton>>,
     mut received_chars: EventReader<ReceivedCharacter>,
     mut mouse_wheel: EventReader<bevy::input::mouse::MouseWheel>,
     mut scale_events: EventReader<WindowScaleFactorChanged>,
 ) {
+    const UNKNOWN_KEYCODE: KeyCode = KeyCode::F35;
     const IMGUI_TO_BEVY_KEYS: [bevy::input::keyboard::KeyCode; imgui::Key::COUNT] = [
         KeyCode::Tab,
-        KeyCode::Left,
-        KeyCode::Right,
-        KeyCode::Up,
-        KeyCode::Down,
+        KeyCode::ArrowLeft,
+        KeyCode::ArrowRight,
+        KeyCode::ArrowUp,
+        KeyCode::ArrowDown,
         KeyCode::PageUp,
         KeyCode::PageDown,
         KeyCode::Home,
         KeyCode::End,
         KeyCode::Insert,
         KeyCode::Delete,
-        KeyCode::Back,
+        KeyCode::Backspace,
         KeyCode::Space,
-        KeyCode::Return,
+        KeyCode::Enter,
         KeyCode::Escape,
         KeyCode::ControlLeft,
         KeyCode::ShiftLeft,
@@ -338,43 +335,43 @@ fn imgui_new_frame_system(
         KeyCode::ShiftRight,
         KeyCode::AltRight,
         KeyCode::SuperRight,
-        KeyCode::Apps, // sys::ImGuiKey_Menu
-        KeyCode::Key0,
-        KeyCode::Key1,
-        KeyCode::Key2,
-        KeyCode::Key3,
-        KeyCode::Key4,
-        KeyCode::Key5,
-        KeyCode::Key6,
-        KeyCode::Key7,
-        KeyCode::Key8,
-        KeyCode::Key9,
-        KeyCode::A,
-        KeyCode::B,
-        KeyCode::C,
-        KeyCode::D,
-        KeyCode::E,
-        KeyCode::F,
-        KeyCode::G,
-        KeyCode::H,
-        KeyCode::I,
-        KeyCode::J,
-        KeyCode::K,
-        KeyCode::L,
-        KeyCode::M,
-        KeyCode::N,
-        KeyCode::O,
-        KeyCode::P,
-        KeyCode::Q,
-        KeyCode::R,
-        KeyCode::S,
-        KeyCode::T,
-        KeyCode::U,
-        KeyCode::V,
-        KeyCode::W,
-        KeyCode::X,
-        KeyCode::Y,
-        KeyCode::Z,
+        KeyCode::ContextMenu, // sys::ImGuiKey_Menu
+        KeyCode::Digit0,
+        KeyCode::Digit1,
+        KeyCode::Digit2,
+        KeyCode::Digit3,
+        KeyCode::Digit4,
+        KeyCode::Digit5,
+        KeyCode::Digit6,
+        KeyCode::Digit7,
+        KeyCode::Digit8,
+        KeyCode::Digit9,
+        KeyCode::KeyA,
+        KeyCode::KeyB,
+        KeyCode::KeyC,
+        KeyCode::KeyD,
+        KeyCode::KeyE,
+        KeyCode::KeyF,
+        KeyCode::KeyG,
+        KeyCode::KeyH,
+        KeyCode::KeyI,
+        KeyCode::KeyJ,
+        KeyCode::KeyK,
+        KeyCode::KeyL,
+        KeyCode::KeyM,
+        KeyCode::KeyN,
+        KeyCode::KeyO,
+        KeyCode::KeyP,
+        KeyCode::KeyQ,
+        KeyCode::KeyR,
+        KeyCode::KeyS,
+        KeyCode::KeyT,
+        KeyCode::KeyU,
+        KeyCode::KeyV,
+        KeyCode::KeyW,
+        KeyCode::KeyX,
+        KeyCode::KeyY,
+        KeyCode::KeyZ,
         KeyCode::F1,
         KeyCode::F2,
         KeyCode::F3,
@@ -387,21 +384,21 @@ fn imgui_new_frame_system(
         KeyCode::F10,
         KeyCode::F11,
         KeyCode::F12,
-        KeyCode::Apostrophe,
+        KeyCode::Quote,
         KeyCode::Comma,
         KeyCode::Minus,
         KeyCode::Period,
         KeyCode::Slash,
         KeyCode::Semicolon,
-        KeyCode::Equals,
+        KeyCode::Equal,
         KeyCode::BracketLeft,
         KeyCode::Backslash,
         KeyCode::BracketRight,
-        KeyCode::Grave,
-        KeyCode::Capital,
-        KeyCode::Scroll,
-        KeyCode::Numlock,
-        KeyCode::Snapshot,
+        KeyCode::Backquote,
+        KeyCode::CapsLock,
+        KeyCode::ScrollLock,
+        KeyCode::NumLock,
+        KeyCode::PrintScreen,
         KeyCode::Pause,
         KeyCode::Numpad0,
         KeyCode::Numpad1,
@@ -419,42 +416,42 @@ fn imgui_new_frame_system(
         KeyCode::NumpadSubtract,
         KeyCode::NumpadAdd,
         KeyCode::NumpadEnter,
-        KeyCode::NumpadEquals,
-        KeyCode::Unlabeled, // GamepadStart = sys::ImGuiKey_GamepadStart,
-        KeyCode::Unlabeled, // GamepadBack = sys::ImGuiKey_GamepadBack,
-        KeyCode::Unlabeled, // GamepadFaceLeft = sys::ImGuiKey_GamepadFaceLeft,
-        KeyCode::Unlabeled, // GamepadFaceRight = sys::ImGuiKey_GamepadFaceRight,
-        KeyCode::Unlabeled, // GamepadFaceUp = sys::ImGuiKey_GamepadFaceUp,
-        KeyCode::Unlabeled, // GamepadFaceDown = sys::ImGuiKey_GamepadFaceDown,
-        KeyCode::Unlabeled, // GamepadDpadLeft = sys::ImGuiKey_GamepadDpadLeft,
-        KeyCode::Unlabeled, // GamepadDpadRight = sys::ImGuiKey_GamepadDpadRight,
-        KeyCode::Unlabeled, // GamepadDpadUp = sys::ImGuiKey_GamepadDpadUp,
-        KeyCode::Unlabeled, // GamepadDpadDown = sys::ImGuiKey_GamepadDpadDown,
-        KeyCode::Unlabeled, // GamepadL1 = sys::ImGuiKey_GamepadL1,
-        KeyCode::Unlabeled, // GamepadR1 = sys::ImGuiKey_GamepadR1,
-        KeyCode::Unlabeled, // GamepadL2 = sys::ImGuiKey_GamepadL2,
-        KeyCode::Unlabeled, // GamepadR2 = sys::ImGuiKey_GamepadR2,
-        KeyCode::Unlabeled, // GamepadL3 = sys::ImGuiKey_GamepadL3,
-        KeyCode::Unlabeled, // GamepadR3 = sys::ImGuiKey_GamepadR3,
-        KeyCode::Unlabeled, // GamepadLStickLeft = sys::ImGuiKey_GamepadLStickLeft,
-        KeyCode::Unlabeled, // GamepadLStickRight = sys::ImGuiKey_GamepadLStickRight,
-        KeyCode::Unlabeled, // GamepadLStickUp = sys::ImGuiKey_GamepadLStickUp,
-        KeyCode::Unlabeled, // GamepadLStickDown = sys::ImGuiKey_GamepadLStickDown,
-        KeyCode::Unlabeled, // GamepadRStickLeft = sys::ImGuiKey_GamepadRStickLeft,
-        KeyCode::Unlabeled, // GamepadRStickRight = sys::ImGuiKey_GamepadRStickRight,
-        KeyCode::Unlabeled, // GamepadRStickUp = sys::ImGuiKey_GamepadRStickUp,
-        KeyCode::Unlabeled, // GamepadRStickDown = sys::ImGuiKey_GamepadRStickDown,
-        KeyCode::Unlabeled, // MouseLeft = sys::ImGuiKey_MouseLeft,
-        KeyCode::Unlabeled, // MouseRight = sys::ImGuiKey_MouseRight,
-        KeyCode::Unlabeled, // MouseMiddle = sys::ImGuiKey_MouseMiddle,
-        KeyCode::Unlabeled, // MouseX1 = sys::ImGuiKey_MouseX1,
-        KeyCode::Unlabeled, // MouseX2 = sys::ImGuiKey_MouseX2,
-        KeyCode::Unlabeled, // MouseWheelX = sys::ImGuiKey_MouseWheelX,
-        KeyCode::Unlabeled, // MouseWheelY = sys::ImGuiKey_MouseWheelY,
-        KeyCode::Unlabeled, // ReservedForModCtrl = sys::ImGuiKey_ReservedForModCtrl,
-        KeyCode::Unlabeled, // ReservedForModShift = sys::ImGuiKey_ReservedForModShift,
-        KeyCode::Unlabeled, // ReservedForModAlt = sys::ImGuiKey_ReservedForModAlt,
-        KeyCode::Unlabeled, // ReservedForModSuper = sys::ImGuiKey_ReservedForModSuper
+        KeyCode::NumpadEqual,
+        UNKNOWN_KEYCODE, // GamepadStart = sys::ImGuiKey_GamepadStart,
+        UNKNOWN_KEYCODE, // GamepadBack = sys::ImGuiKey_GamepadBack,
+        UNKNOWN_KEYCODE, // GamepadFaceLeft = sys::ImGuiKey_GamepadFaceLeft,
+        UNKNOWN_KEYCODE, // GamepadFaceRight = sys::ImGuiKey_GamepadFaceRight,
+        UNKNOWN_KEYCODE, // GamepadFaceUp = sys::ImGuiKey_GamepadFaceUp,
+        UNKNOWN_KEYCODE, // GamepadFaceDown = sys::ImGuiKey_GamepadFaceDown,
+        UNKNOWN_KEYCODE, // GamepadDpadLeft = sys::ImGuiKey_GamepadDpadLeft,
+        UNKNOWN_KEYCODE, // GamepadDpadRight = sys::ImGuiKey_GamepadDpadRight,
+        UNKNOWN_KEYCODE, // GamepadDpadUp = sys::ImGuiKey_GamepadDpadUp,
+        UNKNOWN_KEYCODE, // GamepadDpadDown = sys::ImGuiKey_GamepadDpadDown,
+        UNKNOWN_KEYCODE, // GamepadL1 = sys::ImGuiKey_GamepadL1,
+        UNKNOWN_KEYCODE, // GamepadR1 = sys::ImGuiKey_GamepadR1,
+        UNKNOWN_KEYCODE, // GamepadL2 = sys::ImGuiKey_GamepadL2,
+        UNKNOWN_KEYCODE, // GamepadR2 = sys::ImGuiKey_GamepadR2,
+        UNKNOWN_KEYCODE, // GamepadL3 = sys::ImGuiKey_GamepadL3,
+        UNKNOWN_KEYCODE, // GamepadR3 = sys::ImGuiKey_GamepadR3,
+        UNKNOWN_KEYCODE, // GamepadLStickLeft = sys::ImGuiKey_GamepadLStickLeft,
+        UNKNOWN_KEYCODE, // GamepadLStickRight = sys::ImGuiKey_GamepadLStickRight,
+        UNKNOWN_KEYCODE, // GamepadLStickUp = sys::ImGuiKey_GamepadLStickUp,
+        UNKNOWN_KEYCODE, // GamepadLStickDown = sys::ImGuiKey_GamepadLStickDown,
+        UNKNOWN_KEYCODE, // GamepadRStickLeft = sys::ImGuiKey_GamepadRStickLeft,
+        UNKNOWN_KEYCODE, // GamepadRStickRight = sys::ImGuiKey_GamepadRStickRight,
+        UNKNOWN_KEYCODE, // GamepadRStickUp = sys::ImGuiKey_GamepadRStickUp,
+        UNKNOWN_KEYCODE, // GamepadRStickDown = sys::ImGuiKey_GamepadRStickDown,
+        UNKNOWN_KEYCODE, // MouseLeft = sys::ImGuiKey_MouseLeft,
+        UNKNOWN_KEYCODE, // MouseRight = sys::ImGuiKey_MouseRight,
+        UNKNOWN_KEYCODE, // MouseMiddle = sys::ImGuiKey_MouseMiddle,
+        UNKNOWN_KEYCODE, // MouseX1 = sys::ImGuiKey_MouseX1,
+        UNKNOWN_KEYCODE, // MouseX2 = sys::ImGuiKey_MouseX2,
+        UNKNOWN_KEYCODE, // MouseWheelX = sys::ImGuiKey_MouseWheelX,
+        UNKNOWN_KEYCODE, // MouseWheelY = sys::ImGuiKey_MouseWheelY,
+        UNKNOWN_KEYCODE, // ReservedForModCtrl = sys::ImGuiKey_ReservedForModCtrl,
+        UNKNOWN_KEYCODE, // ReservedForModShift = sys::ImGuiKey_ReservedForModShift,
+        UNKNOWN_KEYCODE, // ReservedForModAlt = sys::ImGuiKey_ReservedForModAlt,
+        UNKNOWN_KEYCODE, // ReservedForModSuper = sys::ImGuiKey_ReservedForModSuper
     ];
 
     for WindowScaleFactorChanged {
@@ -491,7 +488,7 @@ fn imgui_new_frame_system(
         io.mouse_down[2] = mouse.pressed(bevy::input::mouse::MouseButton::Middle);
 
         for e in received_chars.read() {
-            io.add_input_character(e.char);
+            io.add_input_character(e.char.chars().last().unwrap());
         }
 
         for (key_index, key) in IMGUI_TO_BEVY_KEYS.iter().enumerate() {
