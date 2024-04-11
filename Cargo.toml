@@ -7,11 +7,10 @@ categories = ["game-engines", "graphics", "gui", "rendering"]
 description = "A Dear ImGui integration for the Bevy game engine."
 readme = "README.md"
 repository = "https://github.com/jbrd/bevy_mod_imgui"
-rust-version = "1.70.0"
+rust-version = "1.77.0"
 exclude = [".github/", ".gitignore"]
 
 [dependencies]
-bevy = "0.13.0"
 imgui = "0.11.0"
 wgpu = "0.19.3"
 
@@ -20,3 +19,13 @@ wgpu = "0.19.3"
 bytemuck = "1"
 log = "0.4"
 smallvec = "1"
+
+[dependencies.bevy]
+version = "0.13"
+default-features = false
+features = ["bevy_core_pipeline", "bevy_render"]
+
+[dev-dependencies.bevy]
+version = "0.13"
+default-features = false
+features = ["bevy_core_pipeline", "bevy_pbr", "bevy_render"]
