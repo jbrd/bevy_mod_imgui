@@ -38,6 +38,7 @@ use bevy::{
     core_pipeline::core_2d::graph::{Core2d, Node2d},
     core_pipeline::core_3d::graph::{Core3d, Node3d},
     ecs::system::SystemState,
+    input::keyboard::{Key, KeyboardInput},
     prelude::*,
     render::{
         render_graph::{Node, NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel},
@@ -45,7 +46,7 @@ use bevy::{
         view::ExtractedWindows,
         RenderApp,
     },
-    window::{PrimaryWindow, WindowScaleFactorChanged},
+    window::PrimaryWindow,
 };
 use imgui::{FontSource, OwnedDrawData};
 mod imgui_wgpu_rs_local;
@@ -201,8 +202,8 @@ impl Plugin for ImguiPlugin {
     fn finish(&self, app: &mut App) {
         let display_scale = {
             let mut system_state: SystemState<Query<&Window, With<PrimaryWindow>>> =
-                SystemState::new(&mut app.world);
-            let primary_window = system_state.get(&app.world);
+                SystemState::new(app.world_mut());
+            let primary_window = system_state.get(app.world());
             primary_window.get_single().unwrap().scale_factor()
         };
 
@@ -233,61 +234,57 @@ impl Plugin for ImguiPlugin {
             ctx.io_mut()[imgui::Key::VARIANTS[key_index]] = key_index as _;
         }
 
-        let ctx_rc = match app.get_sub_app_mut(RenderApp) {
-            Ok(render_app) => {
-                let device = render_app.world.resource::<RenderDevice>();
-                let queue = render_app.world.resource::<RenderQueue>();
+        let ctx_rc = if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
+            let device = render_app.world().resource::<RenderDevice>();
+            let queue = render_app.world().resource::<RenderQueue>();
 
-                // Here we create a new ImGui renderer with a default format. At this point,
-                // we don't know what format the window surface is going to be set up with,
-                // and yet we need to initialise the renderer so that the texture glyphs
-                // are created before new_frame is called on the imgui context.
-                //
-                // This will give us a functonal imgui context. If, at the point at which we
-                // extract the scene, we realise that the window has an incompatible
-                // format, the renderer will be recreated with a compatible format.
-                let renderer_config = RendererConfig::default();
-                let texture_format = renderer_config.texture_format;
-                let renderer =
-                    Renderer::new(&mut ctx, device.wgpu_device(), queue, renderer_config);
+            // Here we create a new ImGui renderer with a default format. At this point,
+            // we don't know what format the window surface is going to be set up with,
+            // and yet we need to initialise the renderer so that the texture glyphs
+            // are created before new_frame is called on the imgui context.
+            //
+            // This will give us a functonal imgui context. If, at the point at which we
+            // extract the scene, we realise that the window has an incompatible
+            // format, the renderer will be recreated with a compatible format.
+            let renderer_config = RendererConfig::default();
+            let texture_format = renderer_config.texture_format;
+            let renderer = Renderer::new(&mut ctx, device.wgpu_device(), queue, renderer_config);
 
-                render_app.add_render_graph_node::<ImGuiNode>(Core2d, ImGuiNodeLabel);
+            render_app.add_render_graph_node::<ImGuiNode>(Core2d, ImGuiNodeLabel);
 
-                render_app.add_render_graph_edges(Core2d, (Node2d::MainPass, ImGuiNodeLabel));
+            render_app.add_render_graph_edges(Core2d, (Node2d::EndMainPass, ImGuiNodeLabel));
 
-                render_app.add_render_graph_edges(
-                    Core2d,
-                    (Node2d::EndMainPassPostProcessing, ImGuiNodeLabel),
-                );
+            render_app.add_render_graph_edges(
+                Core2d,
+                (Node2d::EndMainPassPostProcessing, ImGuiNodeLabel),
+            );
 
-                render_app.add_render_graph_edges(Core2d, (Node2d::Upscaling, ImGuiNodeLabel));
+            render_app.add_render_graph_edges(Core2d, (Node2d::Upscaling, ImGuiNodeLabel));
 
-                render_app.add_render_graph_node::<ImGuiNode>(Core3d, ImGuiNodeLabel);
+            render_app.add_render_graph_node::<ImGuiNode>(Core3d, ImGuiNodeLabel);
 
-                render_app.add_render_graph_edges(Core3d, (Node3d::EndMainPass, ImGuiNodeLabel));
+            render_app.add_render_graph_edges(Core3d, (Node3d::EndMainPass, ImGuiNodeLabel));
 
-                render_app.add_render_graph_edges(
-                    Core3d,
-                    (Node3d::EndMainPassPostProcessing, ImGuiNodeLabel),
-                );
+            render_app.add_render_graph_edges(
+                Core3d,
+                (Node3d::EndMainPassPostProcessing, ImGuiNodeLabel),
+            );
 
-                render_app.add_render_graph_edges(Core3d, (Node3d::Upscaling, ImGuiNodeLabel));
+            render_app.add_render_graph_edges(Core3d, (Node3d::Upscaling, ImGuiNodeLabel));
 
-                let rc = Rc::new(Mutex::new(ctx));
-                render_app.insert_resource(ImguiRenderContext {
-                    ctx: rc.clone(),
-                    renderer: RefCell::new(renderer),
-                    texture_format,
-                    draw: OwnedDrawData::default(),
-                });
+            let rc = Rc::new(Mutex::new(ctx));
+            render_app.insert_resource(ImguiRenderContext {
+                ctx: rc.clone(),
+                renderer: RefCell::new(renderer),
+                texture_format,
+                draw: OwnedDrawData::default(),
+            });
 
-                render_app.add_systems(ExtractSchedule, imgui_extract_frame_system);
+            render_app.add_systems(ExtractSchedule, imgui_extract_frame_system);
 
-                rc
-            }
-            _ => {
-                return;
-            }
+            rc
+        } else {
+            return;
         };
 
         app.insert_non_send_resource(ImguiContext {
@@ -306,9 +303,8 @@ fn imgui_new_frame_system(
     primary_window: Query<(Entity, &Window), With<PrimaryWindow>>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<bevy::input::mouse::MouseButton>>,
-    mut received_chars: EventReader<ReceivedCharacter>,
+    mut received_chars: EventReader<KeyboardInput>,
     mut mouse_wheel: EventReader<bevy::input::mouse::MouseWheel>,
-    mut scale_events: EventReader<WindowScaleFactorChanged>,
 ) {
     const UNKNOWN_KEYCODE: KeyCode = KeyCode::F35;
     const IMGUI_TO_BEVY_KEYS: [bevy::input::keyboard::KeyCode; imgui::Key::COUNT] = [
@@ -454,30 +450,23 @@ fn imgui_new_frame_system(
         UNKNOWN_KEYCODE, // ReservedForModSuper = sys::ImGuiKey_ReservedForModSuper
     ];
 
-    for WindowScaleFactorChanged {
-        window,
-        scale_factor,
-    } in scale_events.read()
-    {
-        if primary_window.get_single().unwrap().0 == *window {
-            context.display_scale = *scale_factor as f32;
-        }
-    }
+    let Ok((_, primary)) = primary_window.get_single() else {
+        return;
+    };
+    context.display_scale = primary.scale_factor();
 
     let ui_ptr: *mut imgui::Ui;
-    let display_scale = context.display_scale;
-    let font_scale = context.font_scale;
     {
         let mut ctx = context.ctx.lock().unwrap();
         let io = ctx.io_mut();
 
-        let Ok((_, primary)) = primary_window.get_single() else {
-            return;
-        };
-
         io.display_size = [primary.width(), primary.height()];
-        io.display_framebuffer_scale = [display_scale, display_scale];
-        io.font_global_scale = if font_scale { 1.0 / display_scale } else { 1.0 };
+        io.display_framebuffer_scale = [context.display_scale, context.display_scale];
+        io.font_global_scale = if context.font_scale {
+            1.0 / context.display_scale
+        } else {
+            1.0
+        };
 
         if let Some(pos) = primary.cursor_position() {
             io.mouse_pos = [pos.x, pos.y];
@@ -488,7 +477,9 @@ fn imgui_new_frame_system(
         io.mouse_down[2] = mouse.pressed(bevy::input::mouse::MouseButton::Middle);
 
         for e in received_chars.read() {
-            io.add_input_character(e.char.chars().last().unwrap());
+            if let Key::Character(c) = &e.logical_key {
+                io.add_input_character(c.chars().last().unwrap());
+            }
         }
 
         for (key_index, key) in IMGUI_TO_BEVY_KEYS.iter().enumerate() {

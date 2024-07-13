@@ -467,6 +467,7 @@ impl Renderer {
             vertex: VertexState {
                 module: &shader_module,
                 entry_point: vertex_shader_entry_point.unwrap(),
+                compilation_options: Default::default(),
                 buffers: &[VertexBufferLayout {
                     array_stride: size_of::<DrawVert>() as BufferAddress,
                     step_mode: VertexStepMode::Vertex,
@@ -496,6 +497,7 @@ impl Renderer {
             fragment: Some(FragmentState {
                 module: &shader_module,
                 entry_point: fragment_shader_entry_point.unwrap(),
+                compilation_options: Default::default(),
                 targets: &[Some(ColorTargetState {
                     format: texture_format,
                     blend: Some(BlendState {

@@ -8,7 +8,7 @@ struct ImguiState {
 
 fn main() {
     let mut app = App::new();
-    app.insert_resource(ClearColor(Color::rgba(0.2, 0.2, 0.2, 1.0)))
+    app.insert_resource(ClearColor(Color::srgba(0.2, 0.2, 0.2, 1.0)))
         .insert_resource(ImguiState {
             demo_window_open: true,
         })
@@ -33,13 +33,13 @@ fn setup(
     // plane
     commands.spawn(PbrBundle {
         mesh: meshes.add(Plane3d::default().mesh().size(5.0, 5.0)),
-        material: materials.add(Color::rgb(0.3, 0.5, 0.3)),
+        material: materials.add(Color::srgb(0.3, 0.5, 0.3)),
         ..default()
     });
     // cube
     commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::default().mesh()),
-        material: materials.add(Color::rgb(0.8, 0.7, 0.6)),
+        material: materials.add(Color::srgb(0.8, 0.7, 0.6)),
         transform: Transform::from_xyz(0.0, 0.5, 0.0),
         ..default()
     });
@@ -55,6 +55,7 @@ fn setup(
     // camera
     commands.spawn(Camera3dBundle {
         transform: Transform::from_xyz(1.7, 1.7, 2.0).looking_at(Vec3::new(0.0, 0.3, 0.0), Vec3::Y),
+        tonemapping: bevy::core_pipeline::tonemapping::Tonemapping::None,
         ..default()
     });
 }
