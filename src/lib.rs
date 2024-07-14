@@ -37,7 +37,6 @@
 use bevy::{
     core_pipeline::core_2d::graph::{Core2d, Node2d},
     core_pipeline::core_3d::graph::{Core3d, Node3d},
-    ecs::system::SystemState,
     input::keyboard::{Key, KeyboardInput},
     prelude::*,
     render::{
@@ -66,8 +65,6 @@ use wgpu::{
 pub struct ImguiContext {
     ctx: Rc<Mutex<imgui::Context>>,
     ui: *mut imgui::Ui,
-    display_scale: f32,
-    font_scale: bool,
 }
 
 impl ImguiContext {
@@ -200,35 +197,8 @@ impl Plugin for ImguiPlugin {
     fn build(&self, _app: &mut App) {}
 
     fn finish(&self, app: &mut App) {
-        let display_scale = {
-            let mut system_state: SystemState<Query<&Window, With<PrimaryWindow>>> =
-                SystemState::new(app.world_mut());
-            let primary_window = system_state.get(app.world());
-            primary_window.get_single().unwrap().scale_factor()
-        };
-
-        let font_scale = if self.apply_display_scale_to_font_size {
-            display_scale
-        } else {
-            1.0
-        };
-
-        let font_oversample_scale = if self.apply_display_scale_to_font_oversample {
-            display_scale.ceil() as i32
-        } else {
-            1
-        };
-
         let mut ctx = imgui::Context::create();
         ctx.set_ini_filename(self.ini_filename.clone());
-        ctx.fonts().add_font(&[FontSource::DefaultFontData {
-            config: Some(imgui::FontConfig {
-                size_pixels: self.font_size * font_scale,
-                oversample_h: self.font_oversample_h * font_oversample_scale,
-                oversample_v: self.font_oversample_v * font_oversample_scale,
-                ..default()
-            }),
-        }]);
 
         for key_index in 0..imgui::Key::COUNT {
             ctx.io_mut()[imgui::Key::VARIANTS[key_index]] = key_index as _;
@@ -290,8 +260,6 @@ impl Plugin for ImguiPlugin {
         app.insert_non_send_resource(ImguiContext {
             ctx: ctx_rc,
             ui: null_mut(),
-            display_scale,
-            font_scale: self.apply_display_scale_to_font_size,
         });
 
         app.add_systems(PreUpdate, imgui_new_frame_system);
@@ -453,7 +421,7 @@ fn imgui_new_frame_system(
     let Ok((_, primary)) = primary_window.get_single() else {
         return;
     };
-    context.display_scale = primary.scale_factor();
+    let display_scale = primary.scale_factor();
 
     let ui_ptr: *mut imgui::Ui;
     {
@@ -461,12 +429,7 @@ fn imgui_new_frame_system(
         let io = ctx.io_mut();
 
         io.display_size = [primary.width(), primary.height()];
-        io.display_framebuffer_scale = [context.display_scale, context.display_scale];
-        io.font_global_scale = if context.font_scale {
-            1.0 / context.display_scale
-        } else {
-            1.0
-        };
+        io.display_framebuffer_scale = [display_scale, display_scale];
 
         if let Some(pos) = primary.cursor_position() {
             io.mouse_pos = [pos.x, pos.y];
