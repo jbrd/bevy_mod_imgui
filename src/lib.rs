@@ -191,7 +191,7 @@ fn update_display_scale(
     ctx.fonts().clear();
     ctx.fonts().add_font(&[FontSource::DefaultFontData {
         config: Some(imgui::FontConfig {
-            size_pixels: plugin_settings.font_size * font_scale,
+            size_pixels: f32::floor(plugin_settings.font_size * font_scale), // Round down to nearest integer, as per https://github.com/ocornut/imgui/blob/master/docs/FAQ.md#q-how-should-i-handle-dpi-in-my-application
             oversample_h: plugin_settings.font_oversample_h * font_oversample_scale,
             oversample_v: plugin_settings.font_oversample_v * font_oversample_scale,
             ..default()
