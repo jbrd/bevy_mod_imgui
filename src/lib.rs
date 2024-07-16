@@ -185,9 +185,11 @@ fn update_display_scale(
     };
 
     let io = ctx.io_mut();
+    let previous_display_scale = io.display_framebuffer_scale[0];
     io.display_framebuffer_scale = [display_scale, display_scale];
     io.font_global_scale = 1.0 / font_scale;
 
+    // Reload font.
     ctx.fonts().clear();
     ctx.fonts().add_font(&[FontSource::DefaultFontData {
         config: Some(imgui::FontConfig {
@@ -199,6 +201,11 @@ fn update_display_scale(
     }]);
 
     renderer.reload_font_texture(ctx, device.wgpu_device(), queue);
+
+    // Update style for DPI change, as per:
+    // https://github.com/ocornut/imgui/blob/master/docs/FAQ.md#q-how-should-i-handle-dpi-in-my-application
+    ctx.style_mut()
+        .scale_all_sizes(display_scale / previous_display_scale);
 }
 
 /// Configuration settings for this plugin
