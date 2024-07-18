@@ -165,6 +165,7 @@ impl FromWorld for ImGuiNode {
 // This must be performed during Extract as it is the only safe
 // point where we can update the context AND regenerate the font atlas
 fn update_display_scale(
+    previous_display_scale: f32,
     display_scale: f32,
     plugin_settings: &ImguiPlugin,
     ctx: &mut imgui::Context,
@@ -185,7 +186,6 @@ fn update_display_scale(
     };
 
     let io = ctx.io_mut();
-    let previous_display_scale = io.display_framebuffer_scale[0];
     io.display_framebuffer_scale = [display_scale, display_scale];
     io.font_global_scale = 1.0 / font_scale;
 
@@ -290,6 +290,7 @@ impl Plugin for ImguiPlugin {
                 renderer_config,
             );
             update_display_scale(
+                1.0,
                 display_scale,
                 self,
                 &mut context.ctx.lock().unwrap(),
@@ -502,6 +503,7 @@ fn imgui_new_frame_system(
         let io = ctx.io_mut();
 
         io.display_size = [primary.width(), primary.height()];
+        io.display_framebuffer_scale = [primary.scale_factor(), primary.scale_factor()];
 
         if let Some(pos) = primary.cursor_position() {
             io.mouse_pos = [pos.x, pos.y];
@@ -597,6 +599,7 @@ fn imgui_extract_frame_system(
         context.texture_format = texture_format;
 
         update_display_scale(
+            context.display_scale,
             display_scale,
             &context.plugin,
             &mut context.ctx.lock().unwrap(),
