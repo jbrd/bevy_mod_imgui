@@ -38,7 +38,10 @@ use bevy::{
     core_pipeline::core_2d::graph::{Core2d, Node2d},
     core_pipeline::core_3d::graph::{Core3d, Node3d},
     ecs::system::SystemState,
-    input::keyboard::{Key, KeyboardInput},
+    input::{
+        keyboard::{Key, KeyboardInput},
+        ButtonState,
+    },
     prelude::*,
     render::{
         render_graph::{Node, NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel},
@@ -514,8 +517,19 @@ fn imgui_new_frame_system(
         io.mouse_down[2] = mouse.pressed(bevy::input::mouse::MouseButton::Middle);
 
         for e in received_chars.read() {
-            if let Key::Character(c) = &e.logical_key {
-                io.add_input_character(c.chars().last().unwrap());
+            if e.state == ButtonState::Pressed {
+                match &e.logical_key {
+                    Key::Character(c) => {
+                        io.add_input_character(c.chars().last().unwrap());
+                    }
+                    Key::Dead(Some(c)) => {
+                        io.add_input_character(*c);
+                    }
+                    Key::Space => {
+                        io.add_input_character(' ');
+                    }
+                    _ => {}
+                }
             }
         }
 
