@@ -38,14 +38,18 @@ use bevy::{
     core_pipeline::core_2d::graph::{Core2d, Node2d},
     core_pipeline::core_3d::graph::{Core3d, Node3d},
     ecs::system::SystemState,
+    input::{
+        keyboard::{Key, KeyboardInput},
+        ButtonState,
+    },
     prelude::*,
     render::{
         render_graph::{Node, NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel},
         renderer::{RenderContext, RenderDevice, RenderQueue},
         view::ExtractedWindows,
-        RenderApp,
+        MainWorld, RenderApp,
     },
-    window::{PrimaryWindow, WindowScaleFactorChanged},
+    window::PrimaryWindow,
 };
 use imgui::{FontSource, OwnedDrawData};
 mod imgui_wgpu_rs_local;
@@ -65,8 +69,6 @@ use wgpu::{
 pub struct ImguiContext {
     ctx: Rc<Mutex<imgui::Context>>,
     ui: *mut imgui::Ui,
-    display_scale: f32,
-    font_scale: bool,
 }
 
 impl ImguiContext {
@@ -84,6 +86,8 @@ struct ImguiRenderContext {
     renderer: RefCell<Renderer>,
     texture_format: TextureFormat,
     draw: imgui::OwnedDrawData,
+    plugin: ImguiPlugin,
+    display_scale: f32,
 }
 
 unsafe impl Send for ImguiRenderContext {}
@@ -160,7 +164,55 @@ impl FromWorld for ImGuiNode {
     }
 }
 
-/// Configuration settings for this plugin.
+// Update the display scale and reload the font accordingly.
+// This must be performed during Extract as it is the only safe
+// point where we can update the context AND regenerate the font atlas
+fn update_display_scale(
+    previous_display_scale: f32,
+    display_scale: f32,
+    plugin_settings: &ImguiPlugin,
+    ctx: &mut imgui::Context,
+    renderer: &mut Renderer,
+    device: &RenderDevice,
+    queue: &RenderQueue,
+) {
+    let font_scale = if plugin_settings.apply_display_scale_to_font_size {
+        display_scale
+    } else {
+        1.0
+    };
+
+    let font_oversample_scale = if plugin_settings.apply_display_scale_to_font_oversample {
+        display_scale.ceil() as i32
+    } else {
+        1
+    };
+
+    let io = ctx.io_mut();
+    io.display_framebuffer_scale = [display_scale, display_scale];
+    io.font_global_scale = 1.0 / font_scale;
+
+    // Reload font.
+    ctx.fonts().clear();
+    ctx.fonts().add_font(&[FontSource::DefaultFontData {
+        config: Some(imgui::FontConfig {
+            size_pixels: f32::floor(plugin_settings.font_size * font_scale), // Round down to nearest integer, as per https://github.com/ocornut/imgui/blob/master/docs/FAQ.md#q-how-should-i-handle-dpi-in-my-application
+            oversample_h: plugin_settings.font_oversample_h * font_oversample_scale,
+            oversample_v: plugin_settings.font_oversample_v * font_oversample_scale,
+            ..default()
+        }),
+    }]);
+
+    renderer.reload_font_texture(ctx, device.wgpu_device(), queue);
+
+    // Update style for DPI change, as per:
+    // https://github.com/ocornut/imgui/blob/master/docs/FAQ.md#q-how-should-i-handle-dpi-in-my-application
+    ctx.style_mut()
+        .scale_all_sizes(display_scale / previous_display_scale);
+}
+
+/// Configuration settings for this plugin
+#[derive(Clone)]
 pub struct ImguiPlugin {
     /// Sets the path to the ini file (default is "imgui.ini").
     /// Pass None to disable automatic .Ini saving
@@ -199,103 +251,94 @@ impl Plugin for ImguiPlugin {
     fn build(&self, _app: &mut App) {}
 
     fn finish(&self, app: &mut App) {
-        let display_scale = {
-            let mut system_state: SystemState<Query<&Window, With<PrimaryWindow>>> =
-                SystemState::new(&mut app.world);
-            let primary_window = system_state.get(&app.world);
-            primary_window.get_single().unwrap().scale_factor()
-        };
-
-        let font_scale = if self.apply_display_scale_to_font_size {
-            display_scale
-        } else {
-            1.0
-        };
-
-        let font_oversample_scale = if self.apply_display_scale_to_font_oversample {
-            display_scale.ceil() as i32
-        } else {
-            1
-        };
-
         let mut ctx = imgui::Context::create();
         ctx.set_ini_filename(self.ini_filename.clone());
-        ctx.fonts().add_font(&[FontSource::DefaultFontData {
-            config: Some(imgui::FontConfig {
-                size_pixels: self.font_size * font_scale,
-                oversample_h: self.font_oversample_h * font_oversample_scale,
-                oversample_v: self.font_oversample_v * font_oversample_scale,
-                ..default()
-            }),
-        }]);
 
         for key_index in 0..imgui::Key::COUNT {
             ctx.io_mut()[imgui::Key::VARIANTS[key_index]] = key_index as _;
         }
 
-        let ctx_rc = match app.get_sub_app_mut(RenderApp) {
-            Ok(render_app) => {
-                let device = render_app.world.resource::<RenderDevice>();
-                let queue = render_app.world.resource::<RenderQueue>();
-
-                // Here we create a new ImGui renderer with a default format. At this point,
-                // we don't know what format the window surface is going to be set up with,
-                // and yet we need to initialise the renderer so that the texture glyphs
-                // are created before new_frame is called on the imgui context.
-                //
-                // This will give us a functonal imgui context. If, at the point at which we
-                // extract the scene, we realise that the window has an incompatible
-                // format, the renderer will be recreated with a compatible format.
-                let renderer_config = RendererConfig::default();
-                let texture_format = renderer_config.texture_format;
-                let renderer =
-                    Renderer::new(&mut ctx, device.wgpu_device(), queue, renderer_config);
-
-                render_app.add_render_graph_node::<ImGuiNode>(Core2d, ImGuiNodeLabel);
-
-                render_app.add_render_graph_edges(Core2d, (Node2d::MainPass, ImGuiNodeLabel));
-
-                render_app.add_render_graph_edges(
-                    Core2d,
-                    (Node2d::EndMainPassPostProcessing, ImGuiNodeLabel),
-                );
-
-                render_app.add_render_graph_edges(Core2d, (Node2d::Upscaling, ImGuiNodeLabel));
-
-                render_app.add_render_graph_node::<ImGuiNode>(Core3d, ImGuiNodeLabel);
-
-                render_app.add_render_graph_edges(Core3d, (Node3d::EndMainPass, ImGuiNodeLabel));
-
-                render_app.add_render_graph_edges(
-                    Core3d,
-                    (Node3d::EndMainPassPostProcessing, ImGuiNodeLabel),
-                );
-
-                render_app.add_render_graph_edges(Core3d, (Node3d::Upscaling, ImGuiNodeLabel));
-
-                let rc = Rc::new(Mutex::new(ctx));
-                render_app.insert_resource(ImguiRenderContext {
-                    ctx: rc.clone(),
-                    renderer: RefCell::new(renderer),
-                    texture_format,
-                    draw: OwnedDrawData::default(),
-                });
-
-                render_app.add_systems(ExtractSchedule, imgui_extract_frame_system);
-
-                rc
-            }
-            _ => {
-                return;
-            }
+        let display_scale = {
+            let mut system_state: SystemState<Query<&Window, With<PrimaryWindow>>> =
+                SystemState::new(app.world_mut());
+            let primary_window = system_state.get(app.world());
+            primary_window.get_single().unwrap().scale_factor()
         };
 
-        app.insert_non_send_resource(ImguiContext {
-            ctx: ctx_rc,
+        let rc = Rc::new(Mutex::new(ctx));
+        let context = ImguiContext {
+            ctx: rc.clone(),
             ui: null_mut(),
-            display_scale,
-            font_scale: self.apply_display_scale_to_font_size,
-        });
+        };
+
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
+            let device = render_app.world().resource::<RenderDevice>();
+            let queue = render_app.world().resource::<RenderQueue>();
+            let ctx_rc = rc.clone();
+
+            // Here we create a new ImGui renderer with a default format. At this point,
+            // we don't know what format the window surface is going to be set up with,
+            // and yet we need to initialise the renderer so that the texture glyphs
+            // are created before new_frame is called on the imgui context.
+            //
+            // This will give us a functonal imgui context. If, at the point at which we
+            // extract the scene, we realise that the window has an incompatible
+            // format, the renderer will be recreated with a compatible format.
+            let renderer_config = RendererConfig::default();
+            let texture_format = renderer_config.texture_format;
+            let mut renderer = Renderer::new(
+                &mut ctx_rc.lock().unwrap(),
+                device.wgpu_device(),
+                queue,
+                renderer_config,
+            );
+            update_display_scale(
+                1.0,
+                display_scale,
+                self,
+                &mut context.ctx.lock().unwrap(),
+                &mut renderer,
+                device,
+                queue,
+            );
+
+            render_app.add_render_graph_node::<ImGuiNode>(Core2d, ImGuiNodeLabel);
+
+            render_app.add_render_graph_edges(Core2d, (Node2d::EndMainPass, ImGuiNodeLabel));
+
+            render_app.add_render_graph_edges(
+                Core2d,
+                (Node2d::EndMainPassPostProcessing, ImGuiNodeLabel),
+            );
+
+            render_app.add_render_graph_edges(Core2d, (Node2d::Upscaling, ImGuiNodeLabel));
+
+            render_app.add_render_graph_node::<ImGuiNode>(Core3d, ImGuiNodeLabel);
+
+            render_app.add_render_graph_edges(Core3d, (Node3d::EndMainPass, ImGuiNodeLabel));
+
+            render_app.add_render_graph_edges(
+                Core3d,
+                (Node3d::EndMainPassPostProcessing, ImGuiNodeLabel),
+            );
+
+            render_app.add_render_graph_edges(Core3d, (Node3d::Upscaling, ImGuiNodeLabel));
+
+            render_app.insert_resource(ImguiRenderContext {
+                ctx: ctx_rc,
+                renderer: RefCell::new(renderer),
+                texture_format,
+                draw: OwnedDrawData::default(),
+                plugin: self.clone(),
+                display_scale,
+            });
+
+            render_app.add_systems(ExtractSchedule, imgui_extract_frame_system);
+        } else {
+            return;
+        }
+
+        app.insert_non_send_resource(context);
 
         app.add_systems(PreUpdate, imgui_new_frame_system);
     }
@@ -306,9 +349,8 @@ fn imgui_new_frame_system(
     primary_window: Query<(Entity, &Window), With<PrimaryWindow>>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<bevy::input::mouse::MouseButton>>,
-    mut received_chars: EventReader<ReceivedCharacter>,
+    mut received_chars: EventReader<KeyboardInput>,
     mut mouse_wheel: EventReader<bevy::input::mouse::MouseWheel>,
-    mut scale_events: EventReader<WindowScaleFactorChanged>,
 ) {
     const UNKNOWN_KEYCODE: KeyCode = KeyCode::F35;
     const IMGUI_TO_BEVY_KEYS: [bevy::input::keyboard::KeyCode; imgui::Key::COUNT] = [
@@ -454,30 +496,17 @@ fn imgui_new_frame_system(
         UNKNOWN_KEYCODE, // ReservedForModSuper = sys::ImGuiKey_ReservedForModSuper
     ];
 
-    for WindowScaleFactorChanged {
-        window,
-        scale_factor,
-    } in scale_events.read()
-    {
-        if primary_window.get_single().unwrap().0 == *window {
-            context.display_scale = *scale_factor as f32;
-        }
-    }
+    let Ok((_, primary)) = primary_window.get_single() else {
+        return;
+    };
 
     let ui_ptr: *mut imgui::Ui;
-    let display_scale = context.display_scale;
-    let font_scale = context.font_scale;
     {
         let mut ctx = context.ctx.lock().unwrap();
         let io = ctx.io_mut();
 
-        let Ok((_, primary)) = primary_window.get_single() else {
-            return;
-        };
-
         io.display_size = [primary.width(), primary.height()];
-        io.display_framebuffer_scale = [display_scale, display_scale];
-        io.font_global_scale = if font_scale { 1.0 / display_scale } else { 1.0 };
+        io.display_framebuffer_scale = [primary.scale_factor(), primary.scale_factor()];
 
         if let Some(pos) = primary.cursor_position() {
             io.mouse_pos = [pos.x, pos.y];
@@ -488,7 +517,20 @@ fn imgui_new_frame_system(
         io.mouse_down[2] = mouse.pressed(bevy::input::mouse::MouseButton::Middle);
 
         for e in received_chars.read() {
-            io.add_input_character(e.char.chars().last().unwrap());
+            if e.state == ButtonState::Pressed {
+                match &e.logical_key {
+                    Key::Character(c) => {
+                        io.add_input_character(c.chars().last().unwrap());
+                    }
+                    Key::Dead(Some(c)) => {
+                        io.add_input_character(*c);
+                    }
+                    Key::Space => {
+                        io.add_input_character(' ');
+                    }
+                    _ => {}
+                }
+            }
         }
 
         for (key_index, key) in IMGUI_TO_BEVY_KEYS.iter().enumerate() {
@@ -513,6 +555,7 @@ fn imgui_new_frame_system(
 }
 
 fn imgui_extract_frame_system(
+    mut world: ResMut<MainWorld>,
     mut context: ResMut<ImguiRenderContext>,
     extracted_windows: ResMut<ExtractedWindows>,
     device: Res<RenderDevice>,
@@ -525,12 +568,20 @@ fn imgui_extract_frame_system(
         OwnedDrawData::from(draw_data)
     };
 
-    // We've now recorded the draw data for the current frame, and this should be renderer agnostic.
-    // So at this point, we can check to see whether the texture format of the target window matches
-    // the renderer's texture format. If it doesn't, we recreate the Renderer here before we proceed
-    // to render the frame.
-    context.draw = OwnedDrawData::default();
+    // Get the current display scale.
+    let display_scale = {
+        let mut system_state: SystemState<Query<&Window, With<PrimaryWindow>>> =
+            SystemState::new(&mut world);
+        let primary_window = system_state.get(&world);
+        if let Ok(single) = primary_window.get_single() {
+            single.scale_factor()
+        } else {
+            // Fall back to the previously captured display scale. This can happen during app shutdown.
+            context.display_scale
+        }
+    };
 
+    // Determine the current texture format of the primary window
     let Some(primary) = extracted_windows.primary else {
         return;
     };
@@ -540,7 +591,15 @@ fn imgui_extract_frame_system(
     let Some(texture_format) = extracted_window.swap_chain_texture_format else {
         return;
     };
-    if texture_format != context.texture_format {
+
+    // We've now recorded the draw data for the current frame, and this should be renderer agnostic.
+    // So at this point, we can check to see whether the texture format of the target window matches
+    // the renderer's texture format. If it doesn't, we recreate the Renderer here before we proceed
+    // to render the frame.
+    // We also recreate the renderer and the font atlas if the system display scale has changed, since
+    // this is the only safe point in the frame to do so.
+    context.draw = OwnedDrawData::default();
+    if texture_format != context.texture_format || context.display_scale != display_scale {
         let renderer_config = RendererConfig {
             texture_format,
             ..default()
@@ -552,6 +611,17 @@ fn imgui_extract_frame_system(
             renderer_config,
         )));
         context.texture_format = texture_format;
+
+        update_display_scale(
+            context.display_scale,
+            display_scale,
+            &context.plugin,
+            &mut context.ctx.lock().unwrap(),
+            &mut context.renderer.borrow_mut(),
+            &device,
+            &queue,
+        );
+        context.display_scale = display_scale;
     }
     context.draw = owned_draw_data;
 }
