@@ -35,6 +35,7 @@
 //! ```
 
 use bevy::{
+    asset::StrongHandle,
     core_pipeline::core_2d::graph::{Core2d, Node2d},
     core_pipeline::core_3d::graph::{Core3d, Node3d},
     ecs::system::SystemState,
@@ -44,17 +45,27 @@ use bevy::{
     },
     prelude::*,
     render::{
+        render_asset::RenderAssets,
         render_graph::{Node, NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel},
         renderer::{RenderContext, RenderDevice, RenderQueue},
+        texture::GpuImage,
         view::ExtractedWindows,
-        MainWorld, RenderApp,
+        MainWorld, Render, RenderApp, RenderSet,
     },
     window::PrimaryWindow,
 };
-use imgui::{FontSource, OwnedDrawData};
+use imgui::{FontSource, OwnedDrawData, TextureId};
 mod imgui_wgpu_rs_local;
-use imgui_wgpu_rs_local::{Renderer, RendererConfig};
-use std::{cell::RefCell, path::PathBuf, ptr::null_mut, rc::Rc, sync::Mutex};
+use imgui_wgpu_rs_local::{Renderer, RendererConfig, Texture};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+    path::PathBuf,
+    ptr::null_mut,
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 use wgpu::{
     CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachment,
     RenderPassDescriptor, StoreOp, TextureFormat,
@@ -69,6 +80,10 @@ use wgpu::{
 pub struct ImguiContext {
     ctx: Rc<Mutex<imgui::Context>>,
     ui: *mut imgui::Ui,
+    textures: HashMap<imgui::TextureId, Arc<StrongHandle>>,
+    textures_to_add: Vec<imgui::TextureId>,
+    textures_to_remove: Vec<imgui::TextureId>,
+    textures_next_free_id: usize,
 }
 
 impl ImguiContext {
@@ -77,6 +92,29 @@ impl ImguiContext {
     /// Use this to submit UI elements to imgui.
     pub fn ui(&mut self) -> &mut imgui::Ui {
         unsafe { &mut *self.ui }
+    }
+
+    /// Register a Bevy texture with ImGui
+    pub fn register_bevy_texture(&mut self, handle: Handle<Image>) -> imgui::TextureId {
+        // We require strong handles here to ensure the image is alive at the point that
+        // it is registered. Once it is registered, the we maintain a strong handle to
+        // the asset until it is unregistered in order to ensure the texture is always
+        // available for imgui to use
+        if let Handle::Strong(strong) = handle {
+            let result = TextureId::new(self.textures_next_free_id);
+            self.textures.insert(result, strong.clone());
+            self.textures_to_add.push(result);
+            self.textures_next_free_id += 1;
+            result
+        } else {
+            panic!("register_bevy_texture requires a strong Handle<Image>");
+        }
+    }
+
+    /// Unregister a Bevy texture with ImGui
+    pub fn unregister_bevy_texture(&mut self, texture_id: &TextureId) {
+        self.textures.remove(texture_id);
+        self.textures_to_remove.push(*texture_id);
     }
 }
 
@@ -88,6 +126,8 @@ struct ImguiRenderContext {
     draw: imgui::OwnedDrawData,
     plugin: ImguiPlugin,
     display_scale: f32,
+    textures_to_add: HashMap<TextureId, Arc<StrongHandle>>,
+    textures_to_remove: Vec<TextureId>,
 }
 
 unsafe impl Send for ImguiRenderContext {}
@@ -164,6 +204,73 @@ impl FromWorld for ImGuiNode {
     }
 }
 
+// Adds an Image's render resources to the renderer
+fn add_image_to_renderer(
+    texture_id: &TextureId,
+    strong: &Arc<StrongHandle>,
+    gpu_images: &RenderAssets<GpuImage>,
+    renderer: &mut Renderer,
+    device: &RenderDevice,
+) {
+    let handle = Handle::<Image>::Strong(strong.clone());
+    if let Some(gpu_image) = gpu_images.get(&handle) {
+        let texture_arc = unsafe {
+            let const_ptr = gpu_image.texture.deref() as *const wgpu::Texture;
+            std::sync::Arc::increment_strong_count(const_ptr);
+            std::sync::Arc::from_raw(const_ptr as *mut wgpu::Texture)
+        };
+
+        let view_arc = unsafe {
+            let const_ptr = gpu_image.texture_view.deref() as *const wgpu::TextureView;
+            std::sync::Arc::increment_strong_count(const_ptr);
+            std::sync::Arc::from_raw(const_ptr as *mut wgpu::TextureView)
+        };
+
+        let config = imgui_wgpu_rs_local::RawTextureConfig {
+            label: Some("Bevy Texture for ImGui"),
+            sampler_desc: wgpu::SamplerDescriptor {
+                label: Some("Bevy Texture Sampler for ImGui"),
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::FilterMode::Linear,
+                lod_min_clamp: 0.0,
+                lod_max_clamp: 100.0,
+                compare: None,
+                anisotropy_clamp: 1,
+                border_color: None,
+            },
+        };
+
+        let texture = Texture::from_raw_parts(
+            device.wgpu_device(),
+            renderer,
+            texture_arc,
+            view_arc.clone(),
+            None,
+            Some(&config),
+            wgpu::Extent3d {
+                width: gpu_image.texture.width(),
+                height: gpu_image.texture.height(),
+                ..Default::default()
+            },
+        );
+
+        renderer.textures.replace(*texture_id, texture);
+    } else {
+        // We require the texture to be loaded before it is registered because otherwise, its
+        // corresponding TextureId could start being used in Imgui calls, at which point we
+        // don't have enough knowledge of the intended user interface to cope with unloaded / failed
+        // images (e.g. we could display a checkerboard texture, but an equally valid desired
+        // behaviour could be to not emit the controls that draw the image in the first place).
+        // Because we don't have enough context to act accordingly here, we choose instead to
+        // ensure the caller (who owns the images) ensures that textures are loaded before registering.
+        panic!("Could not obtain GPU image for texture. Please ensure textures are loaded prior to registering them with imgui");
+    }
+}
+
 // Update the display scale and reload the font accordingly.
 // This must be performed during Extract as it is the only safe
 // point where we can update the context AND regenerate the font atlas
@@ -171,11 +278,12 @@ fn update_display_scale(
     previous_display_scale: f32,
     display_scale: f32,
     plugin_settings: &ImguiPlugin,
-    ctx: &mut imgui::Context,
+    context: &mut ImguiContext,
     renderer: &mut Renderer,
     device: &RenderDevice,
     queue: &RenderQueue,
 ) {
+    let mut ctx = context.ctx.lock().unwrap();
     let font_scale = if plugin_settings.apply_display_scale_to_font_size {
         display_scale
     } else {
@@ -188,7 +296,7 @@ fn update_display_scale(
         1
     };
 
-    let io = ctx.io_mut();
+    let io = ctx.deref_mut().io_mut();
     io.display_framebuffer_scale = [display_scale, display_scale];
     io.font_global_scale = 1.0 / font_scale;
 
@@ -203,7 +311,26 @@ fn update_display_scale(
         }),
     }]);
 
-    renderer.reload_font_texture(ctx, device.wgpu_device(), queue);
+    // We have no means of iterating over the textures in Textures, so remove all
+    // of the textures we previously added...
+    for texture_id in context.textures.keys() {
+        renderer.textures.remove(*texture_id);
+    }
+
+    // At this point, the only texture left is the font texture. This function
+    // may update this...
+    renderer.reload_font_texture(ctx.deref_mut(), device.wgpu_device(), queue);
+
+    // Flag all textures as needing to be re-added
+    for texture_id in context.textures.keys() {
+        context.textures_to_add.push(*texture_id);
+    }
+
+    // The only new texture that may have been created is the font texture, so the next
+    // free id is either the current free id, or one past the font texture
+    let font_texture_id = ctx.fonts().tex_id;
+    context.textures_next_free_id =
+        usize::max(font_texture_id.id() + 1, context.textures_next_free_id);
 
     // Update style for DPI change, as per:
     // https://github.com/ocornut/imgui/blob/master/docs/FAQ.md#q-how-should-i-handle-dpi-in-my-application
@@ -266,14 +393,19 @@ impl Plugin for ImguiPlugin {
         };
 
         let rc = Rc::new(Mutex::new(ctx));
-        let context = ImguiContext {
+        let mut context = ImguiContext {
             ctx: rc.clone(),
             ui: null_mut(),
+            textures: HashMap::new(),
+            textures_next_free_id: 0,
+            textures_to_add: Vec::new(),
+            textures_to_remove: Vec::new(),
         };
 
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
-            let device = render_app.world().resource::<RenderDevice>();
-            let queue = render_app.world().resource::<RenderQueue>();
+            let mut system_state: SystemState<(Res<RenderDevice>, Res<RenderQueue>)> =
+                SystemState::new(render_app.world_mut());
+            let (device, queue) = system_state.get_mut(render_app.world_mut());
             let ctx_rc = rc.clone();
 
             // Here we create a new ImGui renderer with a default format. At this point,
@@ -289,17 +421,17 @@ impl Plugin for ImguiPlugin {
             let mut renderer = Renderer::new(
                 &mut ctx_rc.lock().unwrap(),
                 device.wgpu_device(),
-                queue,
+                &queue,
                 renderer_config,
             );
             update_display_scale(
                 1.0,
                 display_scale,
                 self,
-                &mut context.ctx.lock().unwrap(),
+                &mut context,
                 &mut renderer,
-                device,
-                queue,
+                &device,
+                &queue,
             );
 
             render_app.add_render_graph_node::<ImGuiNode>(Core2d, ImGuiNodeLabel);
@@ -331,9 +463,15 @@ impl Plugin for ImguiPlugin {
                 draw: OwnedDrawData::default(),
                 plugin: self.clone(),
                 display_scale,
+                textures_to_add: HashMap::new(),
+                textures_to_remove: Vec::new(),
             });
 
             render_app.add_systems(ExtractSchedule, imgui_extract_frame_system);
+            render_app.add_systems(
+                Render,
+                imgui_update_textures_system.in_set(RenderSet::Prepare),
+            );
         } else {
             return;
         }
@@ -568,16 +706,22 @@ fn imgui_extract_frame_system(
         OwnedDrawData::from(draw_data)
     };
 
-    // Get the current display scale.
-    let display_scale = {
+    // Get the current display scale and ImGuiContext
+    let (display_scale, mut cpu_context) = {
         let mut system_state: SystemState<Query<&Window, With<PrimaryWindow>>> =
             SystemState::new(&mut world);
         let primary_window = system_state.get(&world);
         if let Ok(single) = primary_window.get_single() {
-            single.scale_factor()
+            (
+                single.scale_factor(),
+                world.get_non_send_resource_mut::<ImguiContext>().unwrap(),
+            )
         } else {
             // Fall back to the previously captured display scale. This can happen during app shutdown.
-            context.display_scale
+            (
+                context.display_scale,
+                world.get_non_send_resource_mut::<ImguiContext>().unwrap(),
+            )
         }
     };
 
@@ -616,14 +760,58 @@ fn imgui_extract_frame_system(
             context.display_scale,
             display_scale,
             &context.plugin,
-            &mut context.ctx.lock().unwrap(),
+            cpu_context.deref_mut(),
             &mut context.renderer.borrow_mut(),
             &device,
             &queue,
         );
         context.display_scale = display_scale;
+
+        // Re-add all textures
+        for texture_id in cpu_context.textures.keys() {
+            context
+                .textures_to_add
+                .insert(*texture_id, cpu_context.textures[texture_id].clone());
+        }
+    } else {
+        // Just add the textures that have been registered this frame
+        for texture_id in &cpu_context.textures_to_add {
+            context
+                .textures_to_add
+                .insert(*texture_id, cpu_context.textures[texture_id].clone());
+        }
     }
+    context
+        .textures_to_remove
+        .clone_from(&cpu_context.textures_to_remove);
     context.draw = owned_draw_data;
+    cpu_context.textures_to_add.clear();
+    cpu_context.textures_to_remove.clear();
+}
+
+fn imgui_update_textures_system(
+    mut context: ResMut<ImguiRenderContext>,
+    device: Res<RenderDevice>,
+    gpu_images: Res<RenderAssets<GpuImage>>,
+) {
+    // Remove all textures that are flagged for removal
+    let textures_to_remove = context.textures_to_remove.clone();
+    context.textures_to_remove.clear();
+    for texture_id in &textures_to_remove {
+        context.renderer.borrow_mut().textures.remove(*texture_id);
+        context.textures_to_add.remove(texture_id);
+    }
+
+    // Add new textures
+    let mut added_textures = Vec::<TextureId>::new();
+    for (texture_id, handle) in &context.textures_to_add {
+        let mut renderer = context.renderer.borrow_mut();
+        add_image_to_renderer(texture_id, handle, &gpu_images, &mut renderer, &device);
+        added_textures.push(*texture_id);
+    }
+    for texture_id in &added_textures {
+        context.textures_to_add.remove(texture_id);
+    }
 }
 
 pub mod prelude {
