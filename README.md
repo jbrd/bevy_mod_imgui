@@ -22,13 +22,25 @@ This crate is not related to any official Bevy organisation repository in any wa
 
 |`bevy_mod_imgui`|`bevy`  |`wgpu`  |`imgui` |`imgui-wgpu`      |
 |----------------|--------|--------|--------|------------------|
+| 0.5.*          | 0.14.* | 0.20.* | 0.11.* | 0.24.0 (bundled) |
 | 0.4.*          | 0.14.* | 0.20.* | 0.11.* | 0.24.0 (bundled) |
 | 0.3.*          | 0.13.* | 0.19.* | 0.11.* | 0.24.0 (bundled) |
 | 0.2.*          | 0.12.* | 0.17.1 | 0.11.* | 0.24.*           |
 | 0.1.*          | 0.11.* | 0.16.* | 0.11.* | 0.23.*           |
 
+## Examples
+
+The following examples are provided:
+
+* `custom-texture` - to demonstrate how to display a Bevy texture in an ImGui window
+* `hello-world` - to demonstrate basic ImGui functionality (via its demo window)
+* `minimal` - to demonstrate the most minimal example of setting up the plug-in
+* `render-to-texture` - to demonstrate rendering a Bevy scene to a texture and displaying the result on an ImGui window
+
+
 ## Changelog
 
+* `0.5.0` - Add support for drawing Bevy textures in ImGui windows
 * `0.4.0` - Updated dependencies for Bevy `0.14.0`. Improved handling of display scale changes.
 * `0.3.0` - Updated dependencies for Bevy `0.13.0` with bundled `imgui-wgpu-rs`.
 * `0.2.1` - Fix Issue #20 - unchecked window lookup which could cause panic during exit
