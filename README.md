@@ -11,18 +11,12 @@ A Dear ImGui integration for the Bevy game engine.
 
 ## Current Status
 
-Note that this repository should be treated as **experimental** at the moment. I threw this together very
-quickly to get something up and running for some personal projects.
-
-This crate has only been tested on Windows (DX12 and Vulcan).
+This repository is actively maintained and updated when new versions of Bevy are released. New feature
+requests are also welcome, although this project remains relatively low priority, so it may take some
+time for these to be honoured. Contributions welcome - please do start an issue prior to working on
+a feature so that it can be discussed before spending time on it.
 
 This crate is not related to any official Bevy organisation repository in any way.
-
-## Feedback Saught
-
-If you're interested in playing with this crate, I'd be keen to hear your thoughts and how you get on with it (sharing your feedback with stars or issues would be very useful!). I'd be particularly interested in hearing whether anyone has any success with this crate on different platforms so I can keep track of this. I'm also happy to receive source code contributions, please do start an issue if you are considering this.
-
-If there is a large enough appetite for this crate, I may consider taking it further...
 
 ## Compatibility Table
 
