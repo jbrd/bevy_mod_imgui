@@ -40,7 +40,7 @@ The following examples are provided:
 
 ## Changelog
 
-* `0.5.0` - Add support for drawing Bevy textures in ImGui windows
+* `0.5.0` - Add support for drawing Bevy textures in ImGui windows. Fix assert on exit introduced in Bevy 0.14.1
 * `0.4.0` - Updated dependencies for Bevy `0.14.0`. Improved handling of display scale changes.
 * `0.3.0` - Updated dependencies for Bevy `0.13.0` with bundled `imgui-wgpu-rs`.
 * `0.2.1` - Fix Issue #20 - unchecked window lookup which could cause panic during exit
