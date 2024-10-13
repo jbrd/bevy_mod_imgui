@@ -94,7 +94,11 @@ impl ImguiContext {
         unsafe { &mut *self.ui }
     }
 
-    /// Register a Bevy texture with ImGui
+    /// Register a Bevy texture with ImGui. The provided Handle must be strong, and
+    /// the texture will be kept alive until `unregister_bevy_texture` is called to
+    /// release the texture.
+    /// This function returns an `imgui::TextureId` that can be immediately used with
+    /// the underlying ImGui context.
     pub fn register_bevy_texture(&mut self, handle: Handle<Image>) -> imgui::TextureId {
         // We require strong handles here to ensure the image is alive at the point that
         // it is registered. Once it is registered, the we maintain a strong handle to
@@ -111,7 +115,9 @@ impl ImguiContext {
         }
     }
 
-    /// Unregister a Bevy texture with ImGui
+    /// Unregister a Bevy texture with ImGui. The texture must have previously been
+    /// registered with `register_bevy_texture` - this function expects the
+    /// `imgui::TextureId` returned by `register_bevy_texture` to be to be passed here.
     pub fn unregister_bevy_texture(&mut self, texture_id: &TextureId) {
         self.textures.remove(texture_id);
         self.textures_to_remove.push(*texture_id);
@@ -133,6 +139,7 @@ struct ImguiRenderContext {
 unsafe impl Send for ImguiRenderContext {}
 unsafe impl Sync for ImguiRenderContext {}
 
+/// The label used by the render node responsible for rendering ImGui
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 pub struct ImGuiNodeLabel;
 

@@ -11,30 +11,36 @@ A Dear ImGui integration for the Bevy game engine.
 
 ## Current Status
 
-Note that this repository should be treated as **experimental** at the moment. I threw this together very
-quickly to get something up and running for some personal projects.
-
-This crate has only been tested on Windows (DX12 and Vulcan).
+This repository is actively maintained and updated when new versions of Bevy are released. New feature
+requests are also welcome, although this project remains relatively low priority, so it may take some
+time for these to be honoured. Contributions welcome - please do start an issue prior to working on
+a feature so that it can be discussed before spending time on it.
 
 This crate is not related to any official Bevy organisation repository in any way.
-
-## Feedback Saught
-
-If you're interested in playing with this crate, I'd be keen to hear your thoughts and how you get on with it (sharing your feedback with stars or issues would be very useful!). I'd be particularly interested in hearing whether anyone has any success with this crate on different platforms so I can keep track of this. I'm also happy to receive source code contributions, please do start an issue if you are considering this.
-
-If there is a large enough appetite for this crate, I may consider taking it further...
 
 ## Compatibility Table
 
 |`bevy_mod_imgui`|`bevy`  |`wgpu`  |`imgui` |`imgui-wgpu`      |
 |----------------|--------|--------|--------|------------------|
+| 0.5.*          | 0.14.* | 0.20.* | 0.11.* | 0.24.0 (bundled) |
 | 0.4.*          | 0.14.* | 0.20.* | 0.11.* | 0.24.0 (bundled) |
 | 0.3.*          | 0.13.* | 0.19.* | 0.11.* | 0.24.0 (bundled) |
 | 0.2.*          | 0.12.* | 0.17.1 | 0.11.* | 0.24.*           |
 | 0.1.*          | 0.11.* | 0.16.* | 0.11.* | 0.23.*           |
 
+## Examples
+
+The following examples are provided:
+
+* `custom-texture` - to demonstrate how to display a Bevy texture in an ImGui window
+* `hello-world` - to demonstrate basic ImGui functionality (via its demo window)
+* `minimal` - to demonstrate the most minimal example of setting up the plug-in
+* `render-to-texture` - to demonstrate rendering a Bevy scene to a texture and displaying the result on an ImGui window
+
+
 ## Changelog
 
+* `0.5.0` - Add support for drawing Bevy textures in ImGui windows
 * `0.4.0` - Updated dependencies for Bevy `0.14.0`. Improved handling of display scale changes.
 * `0.3.0` - Updated dependencies for Bevy `0.13.0` with bundled `imgui-wgpu-rs`.
 * `0.2.1` - Fix Issue #20 - unchecked window lookup which could cause panic during exit
