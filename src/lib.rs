@@ -641,20 +641,18 @@ fn imgui_new_frame_system(
         UNKNOWN_KEYCODE, // ReservedForModSuper = sys::ImGuiKey_ReservedForModSuper
     ];
 
-    let Ok((_, primary)) = primary_window.get_single() else {
-        return;
-    };
-
     let ui_ptr: *mut imgui::Ui;
     {
         let mut ctx = context.ctx.lock().unwrap();
         let io = ctx.io_mut();
 
-        io.display_size = [primary.width(), primary.height()];
-        io.display_framebuffer_scale = [primary.scale_factor(), primary.scale_factor()];
+        if let Ok((_, primary)) = primary_window.get_single() {
+            io.display_size = [primary.width(), primary.height()];
+            io.display_framebuffer_scale = [primary.scale_factor(), primary.scale_factor()];
 
-        if let Some(pos) = primary.cursor_position() {
-            io.mouse_pos = [pos.x, pos.y];
+            if let Some(pos) = primary.cursor_position() {
+                io.mouse_pos = [pos.x, pos.y];
+            }
         }
 
         io.mouse_down[0] = mouse.pressed(bevy::input::mouse::MouseButton::Left);
