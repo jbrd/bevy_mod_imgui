@@ -36,7 +36,10 @@
 
 use bevy::{
     asset::StrongHandle,
-    core_pipeline::{core_2d::graph::{Core2d, Node2d}, core_3d::graph::{Core3d, Node3d}},
+    core_pipeline::{
+        core_2d::graph::{Core2d, Node2d},
+        core_3d::graph::{Core3d, Node3d},
+    },
     ecs::system::SystemState,
     input::{
         keyboard::{Key, KeyboardInput},
@@ -44,7 +47,12 @@ use bevy::{
     },
     prelude::*,
     render::{
-        render_asset::RenderAssets, render_graph::{Node, NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel}, renderer::{RenderContext, RenderDevice, RenderQueue}, texture::GpuImage, view::ExtractedWindows, Extract, MainWorld, Render, RenderApp, RenderSet
+        render_asset::RenderAssets,
+        render_graph::{Node, NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel},
+        renderer::{RenderContext, RenderDevice, RenderQueue},
+        texture::GpuImage,
+        view::ExtractedWindows,
+        Extract, Render, RenderApp, RenderSet,
     },
     window::PrimaryWindow,
 };
@@ -52,13 +60,11 @@ use imgui::{FontSource, OwnedDrawData, TextureId};
 mod imgui_wgpu_rs_local;
 use imgui_wgpu_rs_local::{Renderer, RendererConfig, Texture};
 use std::{
-    cell::RefCell,
     collections::HashMap,
     ops::{Deref, DerefMut},
     path::PathBuf,
-    ptr::null_mut,
-    rc::Rc,
-    sync::{Arc, Mutex, RwLock},
+    ptr::NonNull,
+    sync::{Arc, RwLock},
 };
 use wgpu::{
     CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachment,
@@ -72,12 +78,17 @@ use wgpu::{
 /// You can use this object to obtain a reference to the underlying `imgui::Ui` object for submitting
 /// UI elements to imgui. This should be done during the Update and PostUpdate phase only.
 pub struct ImguiContext {
-    ctx: Rc<Mutex<imgui::Context>>,
-    ui: *mut imgui::Ui,
+    ctx: RwLock<imgui::Context>,
+    ui: Option<NonNull<imgui::Ui>>,
     textures: HashMap<imgui::TextureId, Arc<StrongHandle>>,
-    textures_to_add: RwLock<Vec<imgui::TextureId>>,
-    textures_to_remove: RwLock<Vec<imgui::TextureId>>,
-    textures_next_free_id: Mutex<usize>,
+    texture_modify: RwLock<ImguiTextureModifyState>,
+}
+
+#[derive(Default)]
+struct ImguiTextureModifyState {
+    to_add: Vec<imgui::TextureId>,
+    to_remove: Vec<imgui::TextureId>,
+    next_free_id: usize,
 }
 
 impl ImguiContext {
@@ -85,7 +96,11 @@ impl ImguiContext {
     ///
     /// Use this to submit UI elements to imgui.
     pub fn ui(&mut self) -> &mut imgui::Ui {
-        unsafe { &mut *self.ui }
+        unsafe {
+            self.ui
+                .expect("Not currently rendering an imgui frame!")
+                .as_mut()
+        }
     }
 
     /// Register a Bevy texture with ImGui. The provided Handle must be strong, and
@@ -99,11 +114,11 @@ impl ImguiContext {
         // the asset until it is unregistered in order to ensure the texture is always
         // available for imgui to use
         if let Handle::Strong(strong) = handle {
-            let mut next = self.textures_next_free_id.lock().unwrap();
-            let result = TextureId::new(*next);
+            let texture_modify = self.texture_modify.get_mut().unwrap();
+            let result = TextureId::new(texture_modify.next_free_id);
             self.textures.insert(result, strong.clone());
-            self.textures_to_add.get_mut().unwrap().push(result);
-            *next += 1;
+            texture_modify.to_add.push(result);
+            texture_modify.next_free_id += 1;
             result
         } else {
             panic!("register_bevy_texture requires a strong Handle<Image>");
@@ -115,13 +130,17 @@ impl ImguiContext {
     /// `imgui::TextureId` returned by `register_bevy_texture` to be to be passed here.
     pub fn unregister_bevy_texture(&mut self, texture_id: &TextureId) {
         self.textures.remove(texture_id);
-        self.textures_to_remove.get_mut().unwrap().push(*texture_id);
+        self.texture_modify
+            .get_mut()
+            .unwrap()
+            .to_remove
+            .push(*texture_id);
     }
 }
 
 /// Used to force a system to be `NonSend`, due to `Extract<NonSend<T>>` not working.
 #[allow(dead_code)]
-struct NonSendHack(*const u8);
+struct NonSendHack;
 
 #[derive(Resource)]
 struct ImguiRenderContext {
@@ -291,7 +310,7 @@ fn update_display_scale(
     device: &RenderDevice,
     queue: &RenderQueue,
 ) {
-    let mut ctx = context.ctx.lock().unwrap();
+    let mut ctx = context.ctx.write().unwrap();
     let font_scale = if plugin_settings.apply_display_scale_to_font_size {
         display_scale
     } else {
@@ -329,15 +348,17 @@ fn update_display_scale(
     // may update this...
     renderer.reload_font_texture(ctx.deref_mut(), device.wgpu_device(), queue);
 
+    let mut texture_modify = context.texture_modify.write().unwrap();
+
     // Flag all textures as needing to be re-added
     for texture_id in context.textures.keys() {
-        context.textures_to_add.write().unwrap().push(*texture_id);
+        texture_modify.to_add.push(*texture_id);
     }
 
     // The only new texture that may have been created is the font texture, so the next
     // free id is either the current free id, or one past the font texture
     let font_texture_id = ctx.fonts().tex_id;
-    let mut next = context.textures_next_free_id.lock().unwrap();
+    let next = &mut texture_modify.next_free_id;
     *next = usize::max(font_texture_id.id() + 1, *next);
 
     // Update style for DPI change, as per:
@@ -400,21 +421,17 @@ impl Plugin for ImguiPlugin {
             primary_window.get_single().unwrap().scale_factor()
         };
 
-        let rc = Rc::new(Mutex::new(ctx));
         let mut context = ImguiContext {
-            ctx: rc.clone(),
-            ui: null_mut(),
+            ctx: RwLock::new(ctx),
+            ui: None,
             textures: HashMap::new(),
-            textures_next_free_id: Mutex::new(0),
-            textures_to_add: RwLock::new(Vec::new()),
-            textures_to_remove: RwLock::new(Vec::new()),
+            texture_modify: default(),
         };
 
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             let mut system_state: SystemState<(Res<RenderDevice>, Res<RenderQueue>)> =
                 SystemState::new(render_app.world_mut());
             let (device, queue) = system_state.get_mut(render_app.world_mut());
-            let ctx_rc = rc.clone();
 
             // Here we create a new ImGui renderer with a default format. At this point,
             // we don't know what format the window surface is going to be set up with,
@@ -427,7 +444,7 @@ impl Plugin for ImguiPlugin {
             let renderer_config = RendererConfig::default();
             let texture_format = renderer_config.texture_format;
             let mut renderer = Renderer::new(
-                &mut ctx_rc.lock().unwrap(),
+                &mut context.ctx.get_mut().unwrap(),
                 device.wgpu_device(),
                 &queue,
                 renderer_config,
@@ -474,7 +491,7 @@ impl Plugin for ImguiPlugin {
                 textures_to_remove: Vec::new(),
             });
 
-            render_app.world_mut().insert_non_send_resource(NonSendHack(null_mut()));
+            render_app.world_mut().insert_non_send_resource(NonSendHack);
 
             render_app.add_systems(ExtractSchedule, imgui_extract_frame_system);
             render_app.add_systems(
@@ -488,6 +505,7 @@ impl Plugin for ImguiPlugin {
         app.insert_non_send_resource(context);
 
         app.add_systems(PreUpdate, imgui_new_frame_system);
+        app.add_systems(PostUpdate, imgui_end_frame_system);
     }
 }
 
@@ -643,9 +661,9 @@ fn imgui_new_frame_system(
         UNKNOWN_KEYCODE, // ReservedForModSuper = sys::ImGuiKey_ReservedForModSuper
     ];
 
-    let ui_ptr: *mut imgui::Ui;
+    let ui_ptr: NonNull<imgui::Ui>;
     {
-        let mut ctx = context.ctx.lock().unwrap();
+        let ctx = context.ctx.get_mut().unwrap();
         let io = ctx.io_mut();
 
         if let Ok((_, primary)) = primary_window.get_single() {
@@ -694,9 +712,13 @@ fn imgui_new_frame_system(
             io.mouse_wheel = e.y;
             io.mouse_wheel_h = e.x;
         }
-        ui_ptr = ctx.new_frame();
+        ui_ptr = unsafe { NonNull::new_unchecked(ctx.new_frame()) };
     }
-    context.ui = ui_ptr;
+    context.ui = Some(ui_ptr);
+}
+
+fn imgui_end_frame_system(mut context: NonSendMut<ImguiContext>) {
+    context.ui = None;
 }
 
 fn imgui_extract_frame_system(
@@ -706,11 +728,11 @@ fn imgui_extract_frame_system(
     extracted_windows: ResMut<ExtractedWindows>,
     device: Res<RenderDevice>,
     queue: ResMut<RenderQueue>,
-    _non_send: NonSend<NonSendHack>
+    _non_send: NonSend<NonSendHack>,
 ) {
     // End the imgui frame.
     let owned_draw_data = {
-        let mut ctx = other_context.ctx.lock().unwrap();
+        let mut ctx = other_context.ctx.write().unwrap();
         let draw_data = ctx.render();
         OwnedDrawDataWrap(OwnedDrawData::from(draw_data))
     };
@@ -749,7 +771,7 @@ fn imgui_extract_frame_system(
             ..default()
         };
         context.renderer = RwLock::new(Renderer::new(
-            &mut other_context.ctx.lock().unwrap(),
+            &mut other_context.ctx.write().unwrap(),
             device.wgpu_device(),
             &queue,
             renderer_config,
@@ -775,18 +797,21 @@ fn imgui_extract_frame_system(
         }
     } else {
         // Just add the textures that have been registered this frame
-        for texture_id in other_context.textures_to_add.read().unwrap().iter() {
+        for texture_id in other_context.texture_modify.read().unwrap().to_add.iter() {
             context
                 .textures_to_add
                 .insert(*texture_id, other_context.textures[texture_id].clone());
         }
     }
+
+    let mut texture_modify = other_context.texture_modify.write().unwrap();
+
     context
         .textures_to_remove
-        .clone_from(&other_context.textures_to_remove.read().unwrap());
+        .clone_from(&texture_modify.to_remove);
     context.draw = owned_draw_data;
-    other_context.textures_to_add.write().unwrap().clear();
-    other_context.textures_to_remove.write().unwrap().clear();
+    texture_modify.to_add.clear();
+    texture_modify.to_remove.clear();
 }
 
 fn imgui_update_textures_system(
@@ -795,10 +820,12 @@ fn imgui_update_textures_system(
     gpu_images: Res<RenderAssets<GpuImage>>,
 ) {
     // Remove all textures that are flagged for removal
+    let context = context.as_mut();
+    let renderer = context.renderer.get_mut().unwrap();
     let textures_to_remove = context.textures_to_remove.clone();
     context.textures_to_remove.clear();
     for texture_id in &textures_to_remove {
-        context.renderer.get_mut().unwrap().textures.remove(*texture_id);
+        renderer.textures.remove(*texture_id);
         context.textures_to_add.remove(texture_id);
     }
 
