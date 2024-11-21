@@ -82,6 +82,7 @@ pub struct ImguiContext {
     ui: Option<NonNull<imgui::Ui>>,
     textures: HashMap<imgui::TextureId, Arc<StrongHandle>>,
     texture_modify: RwLock<ImguiTextureModifyState>,
+    rendered_draw_data: RwLock<OwnedDrawData>,
 }
 
 #[derive(Default)]
@@ -426,6 +427,7 @@ impl Plugin for ImguiPlugin {
             ui: None,
             textures: HashMap::new(),
             texture_modify: default(),
+            rendered_draw_data: default(),
         };
 
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
@@ -718,7 +720,13 @@ fn imgui_new_frame_system(
 }
 
 fn imgui_end_frame_system(mut context: NonSendMut<ImguiContext>) {
+    let context = context.as_mut();
+
+    // End the imgui frame.
+    let draw_data = context.ctx.get_mut().unwrap().render();
+
     context.ui = None;
+    *context.rendered_draw_data.get_mut().unwrap() = OwnedDrawData::from(draw_data);
 }
 
 fn imgui_extract_frame_system(
@@ -730,11 +738,10 @@ fn imgui_extract_frame_system(
     queue: ResMut<RenderQueue>,
     _non_send: NonSend<NonSendHack>,
 ) {
-    // End the imgui frame.
+    // Get the rendered imgui frame data.
     let owned_draw_data = {
-        let mut ctx = other_context.ctx.write().unwrap();
-        let draw_data = ctx.render();
-        OwnedDrawDataWrap(OwnedDrawData::from(draw_data))
+        let mut rendered = other_context.rendered_draw_data.write().unwrap();
+        std::mem::replace(rendered.deref_mut(), OwnedDrawData::default())
     };
 
     // Get the current display scale and ImGuiContext
@@ -809,7 +816,7 @@ fn imgui_extract_frame_system(
     context
         .textures_to_remove
         .clone_from(&texture_modify.to_remove);
-    context.draw = owned_draw_data;
+    context.draw = OwnedDrawDataWrap(owned_draw_data);
     texture_modify.to_add.clear();
     texture_modify.to_remove.clear();
 }
