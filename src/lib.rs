@@ -36,8 +36,7 @@
 
 use bevy::{
     asset::StrongHandle,
-    core_pipeline::core_2d::graph::{Core2d, Node2d},
-    core_pipeline::core_3d::graph::{Core3d, Node3d},
+    core_pipeline::{core_2d::graph::{Core2d, Node2d}, core_3d::graph::{Core3d, Node3d}},
     ecs::system::SystemState,
     input::{
         keyboard::{Key, KeyboardInput},
@@ -45,12 +44,7 @@ use bevy::{
     },
     prelude::*,
     render::{
-        render_asset::RenderAssets,
-        render_graph::{Node, NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel},
-        renderer::{RenderContext, RenderDevice, RenderQueue},
-        texture::GpuImage,
-        view::ExtractedWindows,
-        MainWorld, Render, RenderApp, RenderSet,
+        render_asset::RenderAssets, render_graph::{Node, NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel}, renderer::{RenderContext, RenderDevice, RenderQueue}, texture::GpuImage, view::ExtractedWindows, Extract, MainWorld, Render, RenderApp, RenderSet
     },
     window::PrimaryWindow,
 };
@@ -64,7 +58,7 @@ use std::{
     path::PathBuf,
     ptr::null_mut,
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
 };
 use wgpu::{
     CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachment,
@@ -81,9 +75,9 @@ pub struct ImguiContext {
     ctx: Rc<Mutex<imgui::Context>>,
     ui: *mut imgui::Ui,
     textures: HashMap<imgui::TextureId, Arc<StrongHandle>>,
-    textures_to_add: Vec<imgui::TextureId>,
-    textures_to_remove: Vec<imgui::TextureId>,
-    textures_next_free_id: usize,
+    textures_to_add: RwLock<Vec<imgui::TextureId>>,
+    textures_to_remove: RwLock<Vec<imgui::TextureId>>,
+    textures_next_free_id: Mutex<usize>,
 }
 
 impl ImguiContext {
@@ -105,10 +99,11 @@ impl ImguiContext {
         // the asset until it is unregistered in order to ensure the texture is always
         // available for imgui to use
         if let Handle::Strong(strong) = handle {
-            let result = TextureId::new(self.textures_next_free_id);
+            let mut next = self.textures_next_free_id.lock().unwrap();
+            let result = TextureId::new(*next);
             self.textures.insert(result, strong.clone());
-            self.textures_to_add.push(result);
-            self.textures_next_free_id += 1;
+            self.textures_to_add.get_mut().unwrap().push(result);
+            *next += 1;
             result
         } else {
             panic!("register_bevy_texture requires a strong Handle<Image>");
@@ -120,24 +115,30 @@ impl ImguiContext {
     /// `imgui::TextureId` returned by `register_bevy_texture` to be to be passed here.
     pub fn unregister_bevy_texture(&mut self, texture_id: &TextureId) {
         self.textures.remove(texture_id);
-        self.textures_to_remove.push(*texture_id);
+        self.textures_to_remove.get_mut().unwrap().push(*texture_id);
     }
 }
 
+/// Used to force a system to be `NonSend`, due to `Extract<NonSend<T>>` not working.
+#[allow(dead_code)]
+struct NonSendHack(*const u8);
+
 #[derive(Resource)]
 struct ImguiRenderContext {
-    ctx: Rc<Mutex<imgui::Context>>,
-    renderer: RefCell<Renderer>,
+    renderer: RwLock<Renderer>,
     texture_format: TextureFormat,
-    draw: imgui::OwnedDrawData,
+    draw: OwnedDrawDataWrap,
     plugin: ImguiPlugin,
     display_scale: f32,
     textures_to_add: HashMap<TextureId, Arc<StrongHandle>>,
     textures_to_remove: Vec<TextureId>,
 }
 
-unsafe impl Send for ImguiRenderContext {}
-unsafe impl Sync for ImguiRenderContext {}
+// OwnedDrawData is erroneously not marked Send, do this to make it so.
+#[derive(Default)]
+pub struct OwnedDrawDataWrap(imgui::OwnedDrawData);
+unsafe impl Send for OwnedDrawDataWrap {}
+unsafe impl Sync for OwnedDrawDataWrap {}
 
 /// The label used by the render node responsible for rendering ImGui
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
@@ -193,9 +194,9 @@ impl Node for ImGuiNode {
         let render_device = world.get_resource::<RenderDevice>().unwrap();
         let command_encoder = render_context.command_encoder();
         let wgpu_device = render_device.wgpu_device();
-        let mut renderer = context.renderer.borrow_mut();
+        let mut renderer = context.renderer.write().unwrap();
         if let Ok(mut rpass) = ImGuiNode::create_render_pass(command_encoder, world) {
-            if let Some(draw_data) = context.draw.draw_data() {
+            if let Some(draw_data) = context.draw.0.draw_data() {
                 renderer
                     .render(draw_data, queue, wgpu_device, &mut rpass)
                     .unwrap();
@@ -285,7 +286,7 @@ fn update_display_scale(
     previous_display_scale: f32,
     display_scale: f32,
     plugin_settings: &ImguiPlugin,
-    context: &mut ImguiContext,
+    context: &ImguiContext,
     renderer: &mut Renderer,
     device: &RenderDevice,
     queue: &RenderQueue,
@@ -330,14 +331,14 @@ fn update_display_scale(
 
     // Flag all textures as needing to be re-added
     for texture_id in context.textures.keys() {
-        context.textures_to_add.push(*texture_id);
+        context.textures_to_add.write().unwrap().push(*texture_id);
     }
 
     // The only new texture that may have been created is the font texture, so the next
     // free id is either the current free id, or one past the font texture
     let font_texture_id = ctx.fonts().tex_id;
-    context.textures_next_free_id =
-        usize::max(font_texture_id.id() + 1, context.textures_next_free_id);
+    let mut next = context.textures_next_free_id.lock().unwrap();
+    *next = usize::max(font_texture_id.id() + 1, *next);
 
     // Update style for DPI change, as per:
     // https://github.com/ocornut/imgui/blob/master/docs/FAQ.md#q-how-should-i-handle-dpi-in-my-application
@@ -404,9 +405,9 @@ impl Plugin for ImguiPlugin {
             ctx: rc.clone(),
             ui: null_mut(),
             textures: HashMap::new(),
-            textures_next_free_id: 0,
-            textures_to_add: Vec::new(),
-            textures_to_remove: Vec::new(),
+            textures_next_free_id: Mutex::new(0),
+            textures_to_add: RwLock::new(Vec::new()),
+            textures_to_remove: RwLock::new(Vec::new()),
         };
 
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
@@ -464,15 +465,16 @@ impl Plugin for ImguiPlugin {
             render_app.add_render_graph_edges(Core3d, (Node3d::Upscaling, ImGuiNodeLabel));
 
             render_app.insert_resource(ImguiRenderContext {
-                ctx: ctx_rc,
-                renderer: RefCell::new(renderer),
+                renderer: RwLock::new(renderer),
                 texture_format,
-                draw: OwnedDrawData::default(),
+                draw: OwnedDrawDataWrap::default(),
                 plugin: self.clone(),
                 display_scale,
                 textures_to_add: HashMap::new(),
                 textures_to_remove: Vec::new(),
             });
+
+            render_app.world_mut().insert_non_send_resource(NonSendHack(null_mut()));
 
             render_app.add_systems(ExtractSchedule, imgui_extract_frame_system);
             render_app.add_systems(
@@ -698,35 +700,28 @@ fn imgui_new_frame_system(
 }
 
 fn imgui_extract_frame_system(
-    mut world: ResMut<MainWorld>,
+    primary_window: Extract<Query<&Window, With<PrimaryWindow>>>,
+    mut other_context: Extract<NonSend<ImguiContext>>,
     mut context: ResMut<ImguiRenderContext>,
     extracted_windows: ResMut<ExtractedWindows>,
     device: Res<RenderDevice>,
     queue: ResMut<RenderQueue>,
+    _non_send: NonSend<NonSendHack>
 ) {
     // End the imgui frame.
     let owned_draw_data = {
-        let mut ctx = context.ctx.lock().unwrap();
+        let mut ctx = other_context.ctx.lock().unwrap();
         let draw_data = ctx.render();
-        OwnedDrawData::from(draw_data)
+        OwnedDrawDataWrap(OwnedDrawData::from(draw_data))
     };
 
     // Get the current display scale and ImGuiContext
-    let (display_scale, mut cpu_context) = {
-        let mut system_state: SystemState<Query<&Window, With<PrimaryWindow>>> =
-            SystemState::new(&mut world);
-        let primary_window = system_state.get(&world);
+    let display_scale = {
         if let Ok(single) = primary_window.get_single() {
-            (
-                single.scale_factor(),
-                world.get_non_send_resource_mut::<ImguiContext>().unwrap(),
-            )
+            single.scale_factor()
         } else {
             // Fall back to the previously captured display scale. This can happen during app shutdown.
-            (
-                context.display_scale,
-                world.get_non_send_resource_mut::<ImguiContext>().unwrap(),
-            )
+            context.display_scale
         }
     };
 
@@ -747,51 +742,51 @@ fn imgui_extract_frame_system(
     // to render the frame.
     // We also recreate the renderer and the font atlas if the system display scale has changed, since
     // this is the only safe point in the frame to do so.
-    context.draw = OwnedDrawData::default();
+    context.draw = OwnedDrawDataWrap::default();
     if texture_format != context.texture_format || context.display_scale != display_scale {
         let renderer_config = RendererConfig {
             texture_format,
             ..default()
         };
-        context.renderer.swap(&RefCell::new(Renderer::new(
-            &mut context.ctx.lock().unwrap(),
+        context.renderer = RwLock::new(Renderer::new(
+            &mut other_context.ctx.lock().unwrap(),
             device.wgpu_device(),
             &queue,
             renderer_config,
-        )));
+        ));
         context.texture_format = texture_format;
 
         update_display_scale(
             context.display_scale,
             display_scale,
             &context.plugin,
-            cpu_context.deref_mut(),
-            &mut context.renderer.borrow_mut(),
+            other_context.deref_mut(),
+            &mut context.renderer.write().unwrap(),
             &device,
             &queue,
         );
         context.display_scale = display_scale;
 
         // Re-add all textures
-        for texture_id in cpu_context.textures.keys() {
+        for texture_id in other_context.textures.keys() {
             context
                 .textures_to_add
-                .insert(*texture_id, cpu_context.textures[texture_id].clone());
+                .insert(*texture_id, other_context.textures[texture_id].clone());
         }
     } else {
         // Just add the textures that have been registered this frame
-        for texture_id in &cpu_context.textures_to_add {
+        for texture_id in other_context.textures_to_add.read().unwrap().iter() {
             context
                 .textures_to_add
-                .insert(*texture_id, cpu_context.textures[texture_id].clone());
+                .insert(*texture_id, other_context.textures[texture_id].clone());
         }
     }
     context
         .textures_to_remove
-        .clone_from(&cpu_context.textures_to_remove);
+        .clone_from(&other_context.textures_to_remove.read().unwrap());
     context.draw = owned_draw_data;
-    cpu_context.textures_to_add.clear();
-    cpu_context.textures_to_remove.clear();
+    other_context.textures_to_add.write().unwrap().clear();
+    other_context.textures_to_remove.write().unwrap().clear();
 }
 
 fn imgui_update_textures_system(
@@ -803,14 +798,14 @@ fn imgui_update_textures_system(
     let textures_to_remove = context.textures_to_remove.clone();
     context.textures_to_remove.clear();
     for texture_id in &textures_to_remove {
-        context.renderer.borrow_mut().textures.remove(*texture_id);
+        context.renderer.get_mut().unwrap().textures.remove(*texture_id);
         context.textures_to_add.remove(texture_id);
     }
 
     // Add new textures
     let mut added_textures = Vec::<TextureId>::new();
     for (texture_id, handle) in &context.textures_to_add {
-        let mut renderer = context.renderer.borrow_mut();
+        let mut renderer = context.renderer.write().unwrap();
         add_image_to_renderer(texture_id, handle, &gpu_images, &mut renderer, &device);
         added_textures.push(*texture_id);
     }

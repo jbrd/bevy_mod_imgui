@@ -28,4 +28,4 @@ features = ["bevy_core_pipeline", "bevy_render"]
 [dev-dependencies.bevy]
 version = "0.14"
 default-features = false
-features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_render", "bevy_winit", "png"]
+features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_render", "bevy_winit", "png", "multi_threaded"]
