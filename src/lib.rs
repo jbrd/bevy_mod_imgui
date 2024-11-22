@@ -507,7 +507,7 @@ impl Plugin for ImguiPlugin {
         app.insert_non_send_resource(context);
 
         app.add_systems(PreUpdate, imgui_new_frame_system);
-        app.add_systems(PostUpdate, imgui_end_frame_system);
+        app.add_systems(Last, imgui_end_frame_system);
     }
 }
 
