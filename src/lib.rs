@@ -446,7 +446,7 @@ impl Plugin for ImguiPlugin {
             let renderer_config = RendererConfig::default();
             let texture_format = renderer_config.texture_format;
             let mut renderer = Renderer::new(
-                &mut context.ctx.get_mut().unwrap(),
+                context.ctx.get_mut().unwrap(),
                 device.wgpu_device(),
                 &queue,
                 renderer_config,
@@ -455,7 +455,7 @@ impl Plugin for ImguiPlugin {
                 1.0,
                 display_scale,
                 self,
-                &mut context,
+                &context,
                 &mut renderer,
                 &device,
                 &queue,
@@ -741,7 +741,7 @@ fn imgui_extract_frame_system(
     // Get the rendered imgui frame data.
     let owned_draw_data = {
         let mut rendered = other_context.rendered_draw_data.write().unwrap();
-        std::mem::replace(rendered.deref_mut(), OwnedDrawData::default())
+        std::mem::take(rendered.deref_mut())
     };
 
     // Get the current display scale and ImGuiContext
