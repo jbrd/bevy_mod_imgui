@@ -57,8 +57,7 @@ use bevy::{
     window::PrimaryWindow,
 };
 use imgui::{FontSource, OwnedDrawData, TextureId};
-mod imgui_wgpu_rs_local;
-use imgui_wgpu_rs_local::{Renderer, RendererConfig, Texture};
+use imgui_wgpu::{RawTextureConfig, Renderer, RendererConfig, Texture};
 use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
@@ -254,7 +253,7 @@ fn add_image_to_renderer(
             std::sync::Arc::from_raw(const_ptr as *mut wgpu::TextureView)
         };
 
-        let config = imgui_wgpu_rs_local::RawTextureConfig {
+        let config = RawTextureConfig {
             label: Some("Bevy Texture for ImGui"),
             sampler_desc: wgpu::SamplerDescriptor {
                 label: Some("Bevy Texture Sampler for ImGui"),

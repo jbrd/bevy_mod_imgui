@@ -7,12 +7,13 @@ categories = ["game-engines", "graphics", "gui", "rendering"]
 description = "A Dear ImGui integration for the Bevy game engine."
 readme = "README.md"
 repository = "https://github.com/jbrd/bevy_mod_imgui"
-rust-version = "1.79.0"
+rust-version = "1.82.0"
 exclude = [".github/", ".gitignore"]
 
 [dependencies]
 imgui = "0.12.0"
-wgpu = "0.20"
+imgui-wgpu = {git = "https://github.com/Yatekii/imgui-wgpu-rs", rev = "bab0725"}
+wgpu = "23"
 
 # For imgui_wgpu_rs_local
 # imgui-wgpu = "0.24.0" # temporarily bundling imgui-wgpu with this crate
@@ -21,11 +22,11 @@ log = "0.4"
 smallvec = "1"
 
 [dependencies.bevy]
-version = "0.14"
+version = "0.15.0-rc.3"
 default-features = false
 features = ["bevy_core_pipeline", "bevy_render"]
 
 [dev-dependencies.bevy]
-version = "0.14"
+version = "0.15.0-rc.3"
 default-features = false
-features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_render", "bevy_winit", "png", "multi_threaded"]
+features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_render", "bevy_winit", "png", "multi_threaded", "tonemapping_luts"]
