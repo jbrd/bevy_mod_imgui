@@ -156,7 +156,7 @@ struct ImguiRenderContext {
 
 // OwnedDrawData is erroneously not marked Send, do this to make it so.
 #[derive(Default)]
-pub struct OwnedDrawDataWrap(imgui::OwnedDrawData);
+struct OwnedDrawDataWrap(imgui::OwnedDrawData);
 unsafe impl Send for OwnedDrawDataWrap {}
 unsafe impl Sync for OwnedDrawDataWrap {}
 

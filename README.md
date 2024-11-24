@@ -40,6 +40,7 @@ The following examples are provided:
 
 ## Changelog
 
+* `0.5.1` - Various threading and safety fixes. Fix crash when plugin used with Bevy `multi_threaded` feature
 * `0.5.0` - Add support for drawing Bevy textures in ImGui windows. Fix assert on exit introduced in Bevy 0.14.1
 * `0.4.0` - Updated dependencies for Bevy `0.14.0`. Improved handling of display scale changes.
 * `0.3.0` - Updated dependencies for Bevy `0.13.0` with bundled `imgui-wgpu-rs`.
@@ -52,6 +53,7 @@ The following examples are provided:
 
 * James Bird (@jbrd)
 * @nhlest
+* @PJB3005
 
 ## Acknowledgements
 
