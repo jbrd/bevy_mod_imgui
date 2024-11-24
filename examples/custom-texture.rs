@@ -18,10 +18,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(bevy_mod_imgui::ImguiPlugin::default())
         .add_systems(Startup, |mut commands: Commands| {
-            commands.spawn(Camera3dBundle {
-                tonemapping: bevy::core_pipeline::tonemapping::Tonemapping::None,
-                ..Default::default()
-            });
+            commands.spawn(Camera3d::default());
         })
         .add_systems(Update, imgui_example_ui)
         .add_systems(Startup, startup);
@@ -43,8 +40,7 @@ fn register_texture_if_loaded(
 ) {
     if state.texture_id == 0 {
         if let Some(texture_handle) = &state.texture_handle {
-            if asset_server.get_load_state(texture_handle.id())
-                == Some(bevy::asset::LoadState::Loaded)
+            if asset_server.get_load_state(texture_handle.id()).unwrap().is_loaded()
             {
                 state.texture_id = context.register_bevy_texture(texture_handle.clone()).id();
             }

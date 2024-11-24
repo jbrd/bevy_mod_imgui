@@ -22,7 +22,7 @@ This crate is not related to any official Bevy organisation repository in any wa
 
 |`bevy_mod_imgui`|`bevy`  |`wgpu`  |`imgui` |`imgui-wgpu`      |
 |----------------|--------|--------|--------|------------------|
-| 0.6.*          | 0.14.* | 0.20.* | 0.12.* | 0.24.0 (bundled) |
+| 0.6.*          | 0.15.* | 23.*   | 0.12.* | 0.24.0 (bundled) |
 | 0.5.*          | 0.14.* | 0.20.* | 0.11.* | 0.24.0 (bundled) |
 | 0.4.*          | 0.14.* | 0.20.* | 0.11.* | 0.24.0 (bundled) |
 | 0.3.*          | 0.13.* | 0.19.* | 0.11.* | 0.24.0 (bundled) |
@@ -41,7 +41,7 @@ The following examples are provided:
 
 ## Changelog
 
-* `0.6.0` - Update to imgui-rs `0.12.0`
+* `0.6.0` - Update to imgui-rs `0.12.0`, wgpu `23.0`, Bevy `0.15.0`
 * `0.5.1` - Various threading and safety fixes. Fix crash when plugin used with Bevy `multi_threaded` feature
 * `0.5.0` - Add support for drawing Bevy textures in ImGui windows. Fix assert on exit introduced in Bevy 0.14.1
 * `0.4.0` - Updated dependencies for Bevy `0.14.0`. Improved handling of display scale changes.

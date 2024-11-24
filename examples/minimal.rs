@@ -15,10 +15,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(bevy_mod_imgui::ImguiPlugin::default())
         .add_systems(Startup, |mut commands: Commands| {
-            commands.spawn(Camera3dBundle {
-                tonemapping: bevy::core_pipeline::tonemapping::Tonemapping::None,
-                ..Default::default()
-            });
+            commands.spawn(Camera3d::default());
         })
         .add_systems(Update, imgui_example_ui);
     app.run();
