@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "0.6.0" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "0.6.0" ]
   merge_group:
     types: [checks_requested]
 
