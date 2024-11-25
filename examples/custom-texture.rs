@@ -40,7 +40,10 @@ fn register_texture_if_loaded(
 ) {
     if state.texture_id == 0 {
         if let Some(texture_handle) = &state.texture_handle {
-            if asset_server.get_load_state(texture_handle.id()).unwrap().is_loaded()
+            if asset_server
+                .get_load_state(texture_handle.id())
+                .unwrap()
+                .is_loaded()
             {
                 state.texture_id = context.register_bevy_texture(texture_handle.clone()).id();
             }
