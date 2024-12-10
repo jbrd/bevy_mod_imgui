@@ -21,11 +21,11 @@ log = "0.4"
 smallvec = "1"
 
 [dependencies.bevy]
-version = "0.15.0-rc.3"
+version = "0.15.0"
 default-features = false
-features = ["bevy_core_pipeline", "bevy_render"]
+features = ["bevy_core_pipeline", "bevy_render", "bevy_window"]
 
 [dev-dependencies.bevy]
-version = "0.15.0-rc.3"
+version = "0.15.0"
 default-features = false
-features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_render", "bevy_winit", "png", "multi_threaded", "tonemapping_luts"]
+features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_render", "bevy_window", "bevy_winit", "png", "multi_threaded", "tonemapping_luts"]
