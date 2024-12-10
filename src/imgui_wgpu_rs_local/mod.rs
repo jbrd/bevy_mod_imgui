@@ -466,7 +466,7 @@ impl Renderer {
             layout: Some(&pipeline_layout),
             vertex: VertexState {
                 module: &shader_module,
-                entry_point: vertex_shader_entry_point.unwrap(),
+                entry_point: vertex_shader_entry_point,
                 compilation_options: Default::default(),
                 buffers: &[VertexBufferLayout {
                     array_stride: size_of::<DrawVert>() as BufferAddress,
@@ -496,7 +496,7 @@ impl Renderer {
             },
             fragment: Some(FragmentState {
                 module: &shader_module,
-                entry_point: fragment_shader_entry_point.unwrap(),
+                entry_point: fragment_shader_entry_point,
                 compilation_options: Default::default(),
                 targets: &[Some(ColorTargetState {
                     format: texture_format,
@@ -516,6 +516,7 @@ impl Renderer {
                 })],
             }),
             multiview: None,
+            cache: None,
         });
 
         let mut renderer = Self {
@@ -744,7 +745,7 @@ impl Renderer {
                     .textures
                     .get(texture_id)
                     .ok_or(RendererError::BadTexture(texture_id))?;
-                rpass.set_bind_group(1, &tex.bind_group, &[]);
+                rpass.set_bind_group(1, Some(tex.bind_group.as_ref()), &[]);
 
                 // Set scissors on the renderpass.
                 let end = start + count as u32;
