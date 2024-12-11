@@ -35,6 +35,7 @@ The following examples are provided:
 
 * `custom-texture` - to demonstrate how to display a Bevy texture in an ImGui window
 * `hello-world` - to demonstrate basic ImGui functionality (via its demo window)
+* `hello-world-postupdate` - to demonstrate emitting ImGui from the PostUpdate stage
 * `minimal` - to demonstrate the most minimal example of setting up the plug-in
 * `render-to-texture` - to demonstrate rendering a Bevy scene to a texture and displaying the result on an ImGui window
 
