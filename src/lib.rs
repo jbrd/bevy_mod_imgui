@@ -13,14 +13,14 @@
 //!
 //! fn main() {
 //!     let mut app = App::new();
-//!     app.insert_resource(ClearColor(Color::rgba(0.2, 0.2, 0.2, 1.0)))
+//!     app.insert_resource(ClearColor(Color::srgba(0.2, 0.2, 0.2, 1.0)))
 //!         .insert_resource(ImguiState {
 //!             demo_window_open: true,
 //!         })
 //!         .add_plugins(DefaultPlugins)
 //!         .add_plugins(bevy_mod_imgui::ImguiPlugin::default())
 //!         .add_systems(Startup, |mut commands: Commands| {
-//!             commands.spawn(Camera3dBundle::default());
+//!             commands.spawn(Camera3d::default());
 //!         })
 //!         .add_systems(Update, imgui_example_ui);
 //!     app.run();
@@ -242,18 +242,8 @@ fn add_image_to_renderer(
 ) {
     let handle = Handle::<Image>::Strong(strong.clone());
     if let Some(gpu_image) = gpu_images.get(&handle) {
-        let texture_arc = unsafe {
-            let const_ptr = gpu_image.texture.deref() as *const wgpu::Texture;
-            std::sync::Arc::increment_strong_count(const_ptr);
-            std::sync::Arc::from_raw(const_ptr as *mut wgpu::Texture)
-        };
-
-        let view_arc = unsafe {
-            let const_ptr = gpu_image.texture_view.deref() as *const wgpu::TextureView;
-            std::sync::Arc::increment_strong_count(const_ptr);
-            std::sync::Arc::from_raw(const_ptr as *mut wgpu::TextureView)
-        };
-
+        let texture_arc = std::sync::Arc::new(gpu_image.texture.deref().clone());
+        let view_arc = std::sync::Arc::new(gpu_image.texture_view.deref().clone());
         let config = imgui_wgpu_rs_local::RawTextureConfig {
             label: Some("Bevy Texture for ImGui"),
             sampler_desc: wgpu::SamplerDescriptor {
@@ -419,7 +409,7 @@ impl Plugin for ImguiPlugin {
             let mut system_state: SystemState<Query<&Window, With<PrimaryWindow>>> =
                 SystemState::new(app.world_mut());
             let primary_window = system_state.get(app.world());
-            primary_window.get_single().unwrap().scale_factor()
+            primary_window.single().unwrap().scale_factor()
         };
 
         let mut context = ImguiContext {
@@ -668,7 +658,7 @@ fn imgui_new_frame_system(
         let ctx = context.ctx.get_mut().unwrap();
         let io = ctx.io_mut();
 
-        if let Ok((_, primary)) = primary_window.get_single() {
+        if let Ok((_, primary)) = primary_window.single() {
             io.display_size = [primary.width(), primary.height()];
             io.display_framebuffer_scale = [primary.scale_factor(), primary.scale_factor()];
 
@@ -746,7 +736,7 @@ fn imgui_extract_frame_system(
 
     // Get the current display scale and ImGuiContext
     let display_scale = {
-        if let Ok(single) = primary_window.get_single() {
+        if let Ok(single) = primary_window.single() {
             single.scale_factor()
         } else {
             // Fall back to the previously captured display scale. This can happen during app shutdown.
