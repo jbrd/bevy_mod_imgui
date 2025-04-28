@@ -22,6 +22,7 @@ This crate is not related to any official Bevy organisation repository in any wa
 
 |`bevy_mod_imgui`|`bevy`  |`wgpu`  |`imgui` |`imgui-wgpu`      |
 |----------------|--------|--------|--------|------------------|
+| 0.7.*          | 0.16.* | 24.*   | 0.12.* | 0.24.0 (bundled) |
 | 0.6.*          | 0.15.* | 23.*   | 0.12.* | 0.24.0 (bundled) |
 | 0.5.*          | 0.14.* | 0.20.* | 0.11.* | 0.24.0 (bundled) |
 | 0.4.*          | 0.14.* | 0.20.* | 0.11.* | 0.24.0 (bundled) |
