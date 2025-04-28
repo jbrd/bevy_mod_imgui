@@ -242,18 +242,8 @@ fn add_image_to_renderer(
 ) {
     let handle = Handle::<Image>::Strong(strong.clone());
     if let Some(gpu_image) = gpu_images.get(&handle) {
-        let texture_arc = unsafe {
-            let const_ptr = gpu_image.texture.deref() as *const wgpu::Texture;
-            std::sync::Arc::increment_strong_count(const_ptr);
-            std::sync::Arc::from_raw(const_ptr as *mut wgpu::Texture)
-        };
-
-        let view_arc = unsafe {
-            let const_ptr = gpu_image.texture_view.deref() as *const wgpu::TextureView;
-            std::sync::Arc::increment_strong_count(const_ptr);
-            std::sync::Arc::from_raw(const_ptr as *mut wgpu::TextureView)
-        };
-
+        let texture_arc = std::sync::Arc::new(gpu_image.texture.deref().clone());
+        let view_arc = std::sync::Arc::new(gpu_image.texture_view.deref().clone());
         let config = imgui_wgpu_rs_local::RawTextureConfig {
             label: Some("Bevy Texture for ImGui"),
             sampler_desc: wgpu::SamplerDescriptor {
