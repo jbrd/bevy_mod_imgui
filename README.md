@@ -42,6 +42,7 @@ The following examples are provided:
 
 ## Changelog
 
+* `0.7.0` - Update to wgpu `24.0`, Bevy `0.16.0`. Improved safety / stability of texture management
 * `0.6.0` - Update to imgui-rs `0.12.0`, wgpu `23.0`, Bevy `0.15.0`
 * `0.5.1` - Various threading and safety fixes. Fix crash when plugin used with Bevy `multi_threaded` feature
 * `0.5.0` - Add support for drawing Bevy textures in ImGui windows. Fix assert on exit introduced in Bevy 0.14.1
