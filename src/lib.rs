@@ -217,9 +217,12 @@ impl Node for ImGuiNode {
         let mut renderer = context.renderer.write().unwrap();
         if let Ok(mut rpass) = ImGuiNode::create_render_pass(command_encoder, world) {
             if let Some(draw_data) = context.draw.0.draw_data() {
-                renderer
-                    .render(draw_data, queue, wgpu_device, &mut rpass)
-                    .unwrap();
+                // render function panics if nothing is drawn
+                if draw_data.total_idx_count > 0 {
+                    renderer
+                        .render(draw_data, queue, wgpu_device, &mut rpass)
+                        .unwrap();
+                }
             }
         }
         Ok(())
