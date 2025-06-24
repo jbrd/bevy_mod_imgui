@@ -59,6 +59,7 @@ The following examples are provided:
 * James Bird (@jbrd)
 * @nhlest
 * @PJB3005
+* Marius Metzger (@CrushedPixel)
 
 ## Acknowledgements
 
