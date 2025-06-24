@@ -679,13 +679,20 @@ impl Renderer {
             return Ok(());
         }
 
+        let vertex_buffer = render_data.vertex_buffer.as_ref().unwrap();
+        if vertex_buffer.size() == 0 {
+            return Ok(());
+        }
+
+        let index_buffer = render_data.index_buffer.as_ref().unwrap();
+        if index_buffer.size() == 0 {
+            return Ok(());
+        }
+
         rpass.set_pipeline(&self.pipeline);
         rpass.set_bind_group(0, &self.uniform_bind_group, &[]);
-        rpass.set_vertex_buffer(0, render_data.vertex_buffer.as_ref().unwrap().slice(..));
-        rpass.set_index_buffer(
-            render_data.index_buffer.as_ref().unwrap().slice(..),
-            IndexFormat::Uint16,
-        );
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        rpass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint16);
 
         // Execute all the imgui render work.
         for (draw_list, bases) in draw_data
