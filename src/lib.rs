@@ -56,7 +56,7 @@ use bevy::{
     },
     window::PrimaryWindow,
 };
-use imgui::{FontSource, OwnedDrawData, TextureId};
+use imgui::{ConfigFlags, FontSource, OwnedDrawData, TextureId};
 mod imgui_wgpu_rs_local;
 use imgui_wgpu_rs_local::{Renderer, RendererConfig, Texture};
 use std::{
@@ -378,6 +378,9 @@ pub struct ImguiPlugin {
     /// Pass None to disable automatic .Ini saving
     pub ini_filename: Option<PathBuf>,
 
+    /// The config flags to supply to ImGui's IO when the context is initialized.
+    pub config_flags: ConfigFlags,
+
     /// The unscaled font size to use (default is 13).
     pub font_size: f32,
 
@@ -396,8 +399,16 @@ pub struct ImguiPlugin {
 
 impl Default for ImguiPlugin {
     fn default() -> Self {
+        let mut config_flags = ConfigFlags::empty();
+
+        // enable docking by default if the feature is enabled
+        if cfg!(feature = "docking") {
+            config_flags |= ConfigFlags::DOCKING_ENABLE;
+        }
+
         Self {
             ini_filename: Default::default(),
+            config_flags,
             font_size: 13.0,
             font_oversample_h: 1,
             font_oversample_v: 1,
@@ -417,6 +428,8 @@ impl Plugin for ImguiPlugin {
         for key_index in 0..imgui::Key::COUNT {
             ctx.io_mut()[imgui::Key::VARIANTS[key_index]] = key_index as _;
         }
+
+        ctx.io_mut().config_flags = self.config_flags;
 
         let display_scale = {
             let mut system_state: SystemState<Query<&Window, With<PrimaryWindow>>> =
