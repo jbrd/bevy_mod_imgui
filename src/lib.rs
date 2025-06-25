@@ -104,6 +104,19 @@ impl ImguiContext {
         }
     }
 
+    /// Runs the given function with mutable access to the underlying `imgui::Io` object.
+    ///
+    /// Use this to configure imgui settings, for example in a Startup system.
+    pub fn with_io_mut<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut imgui::Io) -> R,
+    {
+        unsafe {
+            let mut ctx = self.ctx.write().unwrap();
+            f(ctx.io_mut())
+        }
+    }
+
     /// Register a Bevy texture with ImGui. The provided Handle must be strong, and
     /// the texture will be kept alive until `unregister_bevy_texture` is called to
     /// release the texture.
