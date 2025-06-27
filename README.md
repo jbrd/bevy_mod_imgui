@@ -35,6 +35,7 @@ This crate is not related to any official Bevy organisation repository in any wa
 The following examples are provided:
 
 * `custom-texture` - to demonstrate how to display a Bevy texture in an ImGui window
+* `empty` - to demonstrate that an empty draw list is handled gracefully (bug regression example)
 * `hello-world` - to demonstrate basic ImGui functionality (via its demo window)
 * `hello-world-postupdate` - to demonstrate emitting ImGui from the PostUpdate stage
 * `minimal` - to demonstrate the most minimal example of setting up the plug-in
@@ -43,6 +44,7 @@ The following examples are provided:
 
 ## Changelog
 
+* `0.7.1` - Fix for crash in imgui-wpu-rs when the draw list is empty
 * `0.7.0` - Update to wgpu `24.0`, Bevy `0.16.0`. Improved safety / stability of texture management
 * `0.6.0` - Update to imgui-rs `0.12.0`, wgpu `23.0`, Bevy `0.15.0`
 * `0.5.1` - Various threading and safety fixes. Fix crash when plugin used with Bevy `multi_threaded` feature
