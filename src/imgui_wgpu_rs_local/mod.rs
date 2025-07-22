@@ -735,8 +735,6 @@ impl Renderer {
         clip_scale: [f32; 2],
         (vertex_base, index_base): (i32, u32),
     ) -> RendererResult<()> {
-        let mut start = index_base;
-
         for cmd in draw_list.commands() {
             if let Elements { count, cmd_params } = cmd {
                 let clip_rect = [
@@ -755,6 +753,7 @@ impl Renderer {
                 rpass.set_bind_group(1, Some(tex.bind_group.as_ref()), &[]);
 
                 // Set scissors on the renderpass.
+                let start = index_base + cmd_params.idx_offset as u32;
                 let end = start + count as u32;
                 if clip_rect[0] < fb_size[0]
                     && clip_rect[1] < fb_size[1]
@@ -764,8 +763,12 @@ impl Renderer {
                     let scissors = (
                         clip_rect[0].max(0.0).floor() as u32,
                         clip_rect[1].max(0.0).floor() as u32,
-                        (clip_rect[2] - clip_rect[0]).abs().ceil() as u32,
-                        (clip_rect[3] - clip_rect[1]).abs().ceil() as u32,
+                        (clip_rect[2].min(fb_size[0]) - clip_rect[0].max(0.0))
+                            .abs()
+                            .ceil() as u32,
+                        (clip_rect[3].min(fb_size[1]) - clip_rect[1].max(0.0))
+                            .abs()
+                            .ceil() as u32,
                     );
 
                     // XXX: Work-around for wgpu issue [1] by only issuing draw
@@ -777,13 +780,13 @@ impl Renderer {
                         rpass.set_scissor_rect(scissors.0, scissors.1, scissors.2, scissors.3);
 
                         // Draw the current batch of vertices with the renderpass.
-                        rpass.draw_indexed(start..end, vertex_base, 0..1);
+                        rpass.draw_indexed(
+                            start..end,
+                            vertex_base + cmd_params.vtx_offset as i32,
+                            0..1,
+                        );
                     }
                 }
-
-                // Increment the index regardless of whether or not this batch
-                // of vertices was drawn.
-                start = end;
             }
         }
         Ok(())
