@@ -10,6 +10,10 @@ repository = "https://github.com/jbrd/bevy_mod_imgui"
 rust-version = "1.85.0"
 exclude = [".github/", ".gitignore"]
 
+[features]
+default = []
+docking = ["imgui/docking"]
+
 [dependencies]
 imgui = "0.12.0"
 wgpu = "24"
