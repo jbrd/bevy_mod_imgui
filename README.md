@@ -44,6 +44,7 @@ The following examples are provided:
 
 ## Changelog
 
+* `0.7.2` - Fix backend renderer to support ImGui 1.86+ modals
 * `0.7.1` - Fix for crash in imgui-wpu-rs when the draw list is empty
 * `0.7.0` - Update to wgpu `24.0`, Bevy `0.16.0`. Improved safety / stability of texture management
 * `0.6.0` - Update to imgui-rs `0.12.0`, wgpu `23.0`, Bevy `0.15.0`
