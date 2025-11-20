@@ -1,12 +1,10 @@
 //! Shows how to render to a texture. Useful for mirrors, UI, or exporting images.
 
 use bevy::{
+    camera::visibility::RenderLayers,
     prelude::*,
-    render::{
-        render_resource::{
-            Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-        },
-        view::RenderLayers,
+    render::render_resource::{
+        Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
     },
 };
 

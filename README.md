@@ -22,6 +22,7 @@ This crate is not related to any official Bevy organisation repository in any wa
 
 |`bevy_mod_imgui`|`bevy`  |`wgpu`  |`imgui` |`imgui-wgpu`      |
 |----------------|--------|--------|--------|------------------|
+| 0.8.*          | 0.17.* | 26.*   | 0.12.* | 0.24.0 (bundled) |
 | 0.7.*          | 0.16.* | 24.*   | 0.12.* | 0.24.0 (bundled) |
 | 0.6.*          | 0.15.* | 23.*   | 0.12.* | 0.24.0 (bundled) |
 | 0.5.*          | 0.14.* | 0.20.* | 0.11.* | 0.24.0 (bundled) |
@@ -35,6 +36,7 @@ This crate is not related to any official Bevy organisation repository in any wa
 The following examples are provided:
 
 * `custom-texture` - to demonstrate how to display a Bevy texture in an ImGui window
+* `empty` - to demonstrate that an empty draw list is handled gracefully (bug regression example)
 * `hello-world` - to demonstrate basic ImGui functionality (via its demo window)
 * `hello-world-postupdate` - to demonstrate emitting ImGui from the PostUpdate stage
 * `minimal` - to demonstrate the most minimal example of setting up the plug-in
@@ -43,6 +45,9 @@ The following examples are provided:
 
 ## Changelog
 
+* `0.8.0` - Update to wgpu `26.0`, Bevy `0.17.0`.
+* `0.7.2` - Fix backend renderer to support ImGui 1.86+ modals
+* `0.7.1` - Fix for crash in imgui-wpu-rs when the draw list is empty
 * `0.7.0` - Update to wgpu `24.0`, Bevy `0.16.0`. Improved safety / stability of texture management
 * `0.6.0` - Update to imgui-rs `0.12.0`, wgpu `23.0`, Bevy `0.15.0`
 * `0.5.1` - Various threading and safety fixes. Fix crash when plugin used with Bevy `multi_threaded` feature
@@ -59,6 +64,7 @@ The following examples are provided:
 * James Bird (@jbrd)
 * @nhlest
 * @PJB3005
+* Marius Metzger (@CrushedPixel)
 
 ## Acknowledgements
 

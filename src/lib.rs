@@ -48,11 +48,11 @@ use bevy::{
     prelude::*,
     render::{
         render_asset::RenderAssets,
-        render_graph::{Node, NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel},
+        render_graph::{Node, NodeRunError, RenderGraphContext, RenderGraphExt, RenderLabel},
         renderer::{RenderContext, RenderDevice, RenderQueue},
         texture::GpuImage,
         view::ExtractedWindows,
-        Extract, Render, RenderApp, RenderSet,
+        Extract, Render, RenderApp, RenderSystems,
     },
     window::PrimaryWindow,
 };
@@ -204,6 +204,7 @@ impl ImGuiNode {
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: swap_chain_texture_view,
                 resolve_target: None,
+                depth_slice: None,
                 ops: Operations {
                     load: LoadOp::Load,
                     store: StoreOp::Store,
@@ -514,7 +515,7 @@ impl Plugin for ImguiPlugin {
             render_app.add_systems(ExtractSchedule, imgui_extract_frame_system);
             render_app.add_systems(
                 Render,
-                imgui_update_textures_system.in_set(RenderSet::Prepare),
+                imgui_update_textures_system.in_set(RenderSystems::Prepare),
             );
         } else {
             return;
@@ -532,8 +533,8 @@ fn imgui_new_frame_system(
     primary_window: Query<(Entity, &Window), With<PrimaryWindow>>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<bevy::input::mouse::MouseButton>>,
-    mut received_chars: EventReader<KeyboardInput>,
-    mut mouse_wheel: EventReader<bevy::input::mouse::MouseWheel>,
+    mut received_chars: MessageReader<KeyboardInput>,
+    mut mouse_wheel: MessageReader<bevy::input::mouse::MouseWheel>,
 ) {
     const UNKNOWN_KEYCODE: KeyCode = KeyCode::F35;
     const IMGUI_TO_BEVY_KEYS: [bevy::input::keyboard::KeyCode; imgui::Key::COUNT] = [
