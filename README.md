@@ -77,6 +77,7 @@ The following examples are provided:
 * @nhlest
 * @PJB3005
 * Marius Metzger (@CrushedPixel)
+* Josiah Glosson (@Gaming32)
 
 ## Acknowledgements
 
