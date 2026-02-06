@@ -1,7 +1,7 @@
 //! Shows how to render to a texture. Useful for mirrors, UI, or exporting images.
 
 use bevy::{
-    camera::visibility::RenderLayers,
+    camera::{visibility::RenderLayers, RenderTarget},
     prelude::*,
     render::render_resource::{
         Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
@@ -112,17 +112,20 @@ fn setup(
         Camera {
             // render before the "main pass" camera
             order: -1,
-            target: image_handle.clone().into(),
             clear_color: Color::WHITE.into(),
             ..default()
         },
         Camera3d::default(),
+        RenderTarget::Image(image_handle.clone().into()),
         Transform::from_translation(Vec3::new(0.0, 0.0, 15.0)).looking_at(Vec3::ZERO, Vec3::Y),
         first_pass_layer,
     ));
 
     // The main pass camera.
-    commands.spawn(Transform::from_xyz(0.0, 0.0, 15.0).looking_at(Vec3::ZERO, Vec3::Y));
+    commands.spawn((
+        Transform::from_xyz(0.0, 0.0, 15.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Camera3d::default(),
+    ));
 }
 
 /// Rotates the inner cube (first pass)
