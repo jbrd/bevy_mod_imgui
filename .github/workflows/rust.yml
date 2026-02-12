@@ -15,19 +15,38 @@ jobs:
   build:
 
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - name: imgui
+            build_flags: "--all-targets --features docking"
+            test_flags: "--all-targets --features docking"
+            clippy_flags: "--workspace --all-targets --features docking"
+            doc_flags: "--features docking"
+          - name: dear
+            build_flags: "--no-default-features --features dear-imgui-rs"
+            test_flags: "--no-default-features --features dear-imgui-rs"
+            clippy_flags: "--workspace --no-default-features --features dear-imgui-rs"
+            doc_flags: "--no-default-features --features dear-imgui-rs"
 
     steps:
     - uses: actions/checkout@v3
     - uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt, clippy
+    - name: Backend
+      run: echo "Backend=${{ matrix.backend.name }}"
     - name: Build
-      run: cargo build --verbose --all-targets --all-features
+      run: cargo build --verbose ${{ matrix.backend.build_flags }}
+    - name: Build examples (dear)
+      if: matrix.backend.name == 'dear'
+      run: cargo build --verbose --example dear-minimal --no-default-features --features dear-imgui-rs
     - name: Run tests
-      run: cargo test --verbose --all-targets --all-features
+      run: cargo test --verbose ${{ matrix.backend.test_flags }}
     - name: Run format checks
       run: cargo fmt --all -- --check
     - name: Run clippy
-      run: cargo clippy --workspace --all-targets --all-features -- -Dwarnings --no-deps
+      run: cargo clippy ${{ matrix.backend.clippy_flags }} -- -Dwarnings --no-deps
     - name: Run doc
-      run: cargo doc --no-deps --all-features
+      run: cargo doc --no-deps ${{ matrix.backend.doc_flags }}
