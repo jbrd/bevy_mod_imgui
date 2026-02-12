@@ -1,4 +1,4 @@
-# Bundled Module - imgui_wgpu_rs 0.24.0
+# Bundled Module - imgui-wgpu-rs 0.24.0 (internal)
 
 This software contains portions of code derived from [imgui-wgpu-rs](https://github.com/Yatekii/imgui-wgpu-rs/tree/master).
 https://github.com/Yatekii/imgui-wgpu-rs/tree/master

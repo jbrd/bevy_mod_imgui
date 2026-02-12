@@ -20,6 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+// Vendored from imgui-wgpu-rs; used internally by bevy_mod_imgui.
+
 struct Uniforms {
     u_Matrix: mat4x4<f32>,
 };

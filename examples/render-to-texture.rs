@@ -13,7 +13,7 @@ use bevy_mod_imgui::prelude::*;
 #[derive(Default, Resource)]
 struct ImguiState {
     demo_window_open: bool,
-    texture_handle: Option<Handle<Image>>,
+    texture_handle: Option<Handle<bevy::prelude::Image>>,
     texture_id: usize,
 }
 
@@ -38,7 +38,7 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut images: ResMut<Assets<Image>>,
+    mut images: ResMut<Assets<bevy::prelude::Image>>,
     mut state: ResMut<ImguiState>,
 ) {
     // Set up a render target
@@ -48,7 +48,7 @@ fn setup(
         ..default()
     };
 
-    let mut image = Image {
+    let mut image = bevy::prelude::Image {
         texture_descriptor: TextureDescriptor {
             label: None,
             size,
@@ -138,7 +138,7 @@ fn rotator_system(time: Res<Time>, mut query: Query<&mut Transform, With<FirstPa
 
 fn imgui_example_ui(
     mut state: ResMut<ImguiState>,
-    images: Res<Assets<Image>>,
+    images: Res<Assets<bevy::prelude::Image>>,
     mut context: NonSendMut<ImguiContext>,
 ) {
     // Register the texture if we haven't already

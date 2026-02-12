@@ -4,7 +4,7 @@ use bevy_mod_imgui::prelude::*;
 #[derive(Default, Resource)]
 struct ImguiState {
     demo_window_open: bool,
-    texture_handle: Option<Handle<Image>>,
+    texture_handle: Option<Handle<bevy::prelude::Image>>,
     texture_id: usize,
 }
 
@@ -60,7 +60,7 @@ fn unload_texture(state: &mut ResMut<ImguiState>, context: &mut NonSendMut<Imgui
 fn imgui_example_ui(
     mut state: ResMut<ImguiState>,
     asset_server: Res<AssetServer>,
-    images: Res<Assets<Image>>,
+    images: Res<Assets<bevy::prelude::Image>>,
     mut context: NonSendMut<ImguiContext>,
 ) {
     register_texture_if_loaded(&mut state, &asset_server, &mut context);
