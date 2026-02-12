@@ -42,12 +42,25 @@ Use the following command to run the docking demo: `cargo run --example docking 
 
 ![docking example](media/docking.gif)
 
+### dear-imgui-rs Backend (Experimental)
+
+An experimental backend based on [`dear-imgui-rs`](https://crates.io/crates/dear-imgui-rs) can be enabled with the `dear-imgui-rs` feature.
+
+Use the following command to run the example: `cargo run --example dear-minimal --no-default-features --features dear-imgui-rs`
+
+Notes:
+
+* This backend uses `dear-imgui-rs` APIs via `bevy_mod_imgui::prelude::*` and `DearImguiPlugin`.
+* The `dear-imgui-rs` backend is mutually exclusive with the default `imgui-rs` backend (because the native ImGui symbols would otherwise be linked twice). Use `--no-default-features`.
+* Texture support includes ImGui 1.92+ managed textures (threaded snapshot + feedback) and the legacy `TextureId` path (via `DearImguiContext::register_bevy_texture`).
+
 ## Examples
 
 The following examples are provided:
 
 * `custom-texture` - to demonstrate how to display a Bevy texture in an ImGui window
 * `docking` - to demonstrate the `docking` feature (see above)
+* `dear-minimal` - minimal example using the experimental `dear-imgui-rs` backend
 * `empty` - to demonstrate that an empty draw list is handled gracefully (bug regression example)
 * `hello-world` - to demonstrate basic ImGui functionality (via its demo window)
 * `hello-world-postupdate` - to demonstrate emitting ImGui from the PostUpdate stage
