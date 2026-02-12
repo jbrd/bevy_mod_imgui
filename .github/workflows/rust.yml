@@ -41,7 +41,9 @@ jobs:
       run: cargo build --verbose ${{ matrix.backend.build_flags }}
     - name: Build examples (dear)
       if: matrix.backend.name == 'dear'
-      run: cargo build --verbose --example dear-minimal --no-default-features --features dear-imgui-rs
+      run: |
+        cargo build --verbose --example dear-minimal --no-default-features --features dear-imgui-rs
+        cargo build --verbose --example dear-custom-texture --no-default-features --features dear-imgui-rs
     - name: Run tests
       run: cargo test --verbose ${{ matrix.backend.test_flags }}
     - name: Run format checks

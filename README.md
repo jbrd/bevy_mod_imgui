@@ -60,6 +60,7 @@ The following examples are provided:
 
 * `custom-texture` - to demonstrate how to display a Bevy texture in an ImGui window
 * `docking` - to demonstrate the `docking` feature (see above)
+* `dear-custom-texture` - show a Bevy texture via the experimental `dear-imgui-rs` backend
 * `dear-minimal` - minimal example using the experimental `dear-imgui-rs` backend
 * `empty` - to demonstrate that an empty draw list is handled gracefully (bug regression example)
 * `hello-world` - to demonstrate basic ImGui functionality (via its demo window)

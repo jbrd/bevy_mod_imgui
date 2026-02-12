@@ -77,3 +77,7 @@ required-features = ["imgui-rs"]
 [[example]]
 name = "dear-minimal"
 required-features = ["dear-imgui-rs"]
+
+[[example]]
+name = "dear-custom-texture"
+required-features = ["dear-imgui-rs"]
