@@ -114,7 +114,7 @@ impl Default for TextureConfig<'_> {
             address_mode_w: AddressMode::ClampToEdge,
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Linear,
+            mipmap_filter: MipmapFilterMode::Linear,
             lod_min_clamp: 0.0,
             lod_max_clamp: 100.0,
             compare: None,
@@ -409,7 +409,7 @@ impl Renderer {
             label: None,
             entries: &[BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
+                visibility: ShaderStages::VERTEX,
                 ty: BindingType::Buffer {
                     ty: BufferBindingType::Uniform,
                     has_dynamic_offset: false,
@@ -435,7 +435,7 @@ impl Renderer {
             entries: &[
                 BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    visibility: ShaderStages::FRAGMENT,
                     ty: BindingType::Texture {
                         multisampled: false,
                         sample_type: TextureSampleType::Float { filterable: true },
@@ -445,8 +445,8 @@ impl Renderer {
                 },
                 BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
                     count: None,
                 },
             ],
@@ -455,8 +455,8 @@ impl Renderer {
         // Create the render pipeline layout.
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("imgui-wgpu pipeline layout"),
-            bind_group_layouts: &[&uniform_layout, &texture_layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[Some(&uniform_layout), Some(&texture_layout)],
+            immediate_size: 0,
         });
 
         // Create the render pipeline.
@@ -483,11 +483,11 @@ impl Renderer {
                 unclipped_depth: false,
                 conservative: false,
             },
-            depth_stencil: depth_format.map(|format| wgpu::DepthStencilState {
+            depth_stencil: depth_format.map(|format| DepthStencilState {
                 format,
-                depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::Always,
-                stencil: wgpu::StencilState::default(),
+                depth_write_enabled: Some(false),
+                depth_compare: Some(CompareFunction::Always),
+                stencil: StencilState::default(),
                 bias: DepthBiasState::default(),
             }),
             multisample: MultisampleState {
@@ -515,7 +515,7 @@ impl Renderer {
                     write_mask: ColorWrites::ALL,
                 })],
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 

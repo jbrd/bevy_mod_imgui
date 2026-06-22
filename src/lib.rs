@@ -97,19 +97,17 @@
 
 use bevy::{
     asset::StrongHandle,
-    core_pipeline::{
-        core_2d::graph::{Core2d, Node2d},
-        core_3d::graph::{Core3d, Node3d},
-    },
+    core_pipeline::{schedule::Core2d, schedule::Core3d, upscaling::upscaling},
     ecs::system::SystemState,
+    image::ImageSampler,
     input::{
         keyboard::{Key, KeyboardInput},
-        ButtonState,
+        mouse::{MouseButton, MouseWheel},
+        ButtonInput, ButtonState,
     },
     prelude::*,
     render::{
         render_asset::RenderAssets,
-        render_graph::{Node, NodeRunError, RenderGraphContext, RenderGraphExt, RenderLabel},
         renderer::{RenderContext, RenderDevice, RenderQueue},
         texture::GpuImage,
         view::ExtractedWindows,
@@ -119,7 +117,6 @@ use bevy::{
 };
 use imgui::{ConfigFlags, FontSource, OwnedDrawData, TextureId};
 mod imgui_wgpu_rs_local;
-use bevy::image::ImageSampler;
 use imgui_wgpu_rs_local::{Renderer, RendererConfig, Texture};
 use std::{
     collections::HashMap,
@@ -129,8 +126,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use wgpu::{
-    CommandEncoder, LoadOp, Operations, RenderPass, RenderPassColorAttachment,
-    RenderPassDescriptor, StoreOp, TextureFormat,
+    LoadOp, Operations, RenderPassColorAttachment, RenderPassDescriptor, StoreOp, TextureFormat,
 };
 
 /// The ImGui context resource.
@@ -307,76 +303,45 @@ struct OwnedDrawDataWrap(imgui::OwnedDrawData);
 unsafe impl Send for OwnedDrawDataWrap {}
 unsafe impl Sync for OwnedDrawDataWrap {}
 
-/// The label used by the render node responsible for rendering ImGui
-#[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-pub struct ImguiNodeLabel;
+fn imgui_render_system(
+    imgui_render_context: Res<ImguiRenderContext>,
+    mut render_context: RenderContext,
+    render_device: Res<RenderDevice>,
+    render_queue: Res<RenderQueue>,
+    extracted_windows: Res<ExtractedWindows>,
+) {
+    let Some(primary) = extracted_windows.primary else {
+        return; // No primary window
+    };
+    let Some(extracted_window) = extracted_windows.windows.get(&primary) else {
+        return; // No primary window
+    };
+    let Some(swap_chain_texture_view) = extracted_window.swap_chain_texture_view.as_ref() else {
+        return; // No swapchain texture
+    };
 
-struct ImguiNode;
+    let command_encoder = render_context.command_encoder();
+    let wgpu_device = render_device.wgpu_device();
+    let mut renderer = imgui_render_context.renderer.write().unwrap();
 
-impl ImguiNode {
-    fn create_render_pass<'a>(
-        command_encoder: &'a mut CommandEncoder,
-        world: &'a World,
-    ) -> Result<RenderPass<'a>, ()> {
-        let extracted_windows = &world.get_resource::<ExtractedWindows>().unwrap();
-        let Some(primary) = extracted_windows.primary else {
-            return Err(()); // No primary window
-        };
-        let Some(extracted_window) = extracted_windows.windows.get(&primary) else {
-            return Err(()); // No primary window
-        };
-        let swap_chain_texture_view = if let Some(swap_chain_texture_view) =
-            extracted_window.swap_chain_texture_view.as_ref()
-        {
-            swap_chain_texture_view
-        } else {
-            return Err(()); // No swapchain texture
-        };
+    let render_pass_descriptor = RenderPassDescriptor {
+        label: None,
+        color_attachments: &[Some(RenderPassColorAttachment {
+            view: swap_chain_texture_view,
+            resolve_target: None,
+            depth_slice: None,
+            ops: Operations {
+                load: LoadOp::Load,
+                store: StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: None,
+        ..Default::default()
+    };
 
-        Ok(command_encoder.begin_render_pass(&RenderPassDescriptor {
-            label: None,
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: swap_chain_texture_view,
-                resolve_target: None,
-                depth_slice: None,
-                ops: Operations {
-                    load: LoadOp::Load,
-                    store: StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            ..Default::default()
-        }))
-    }
-}
-
-impl Node for ImguiNode {
-    fn run(
-        &self,
-        _graph: &mut RenderGraphContext,
-        render_context: &mut RenderContext,
-        world: &World,
-    ) -> Result<(), NodeRunError> {
-        let imgui_render_context = world.resource::<ImguiRenderContext>();
-        let queue = world.get_resource::<RenderQueue>().unwrap();
-        let render_device = world.get_resource::<RenderDevice>().unwrap();
-        let command_encoder = render_context.command_encoder();
-        let wgpu_device = render_device.wgpu_device();
-        let mut renderer = imgui_render_context.renderer.write().unwrap();
-        if let Ok(mut rpass) = ImguiNode::create_render_pass(command_encoder, world) {
-            if let Some(draw_data) = imgui_render_context.draw.0.draw_data() {
-                renderer
-                    .render(draw_data, queue, wgpu_device, &mut rpass)
-                    .unwrap();
-            }
-        }
-        Ok(())
-    }
-}
-
-impl FromWorld for ImguiNode {
-    fn from_world(_world: &mut World) -> ImguiNode {
-        ImguiNode {}
+    let mut rpass = command_encoder.begin_render_pass(&render_pass_descriptor);
+    if let Some(draw_data) = imgui_render_context.draw.0.draw_data() {
+        let _ = renderer.render(draw_data, render_queue.as_ref(), wgpu_device, &mut rpass);
     }
 }
 
@@ -417,7 +382,7 @@ fn add_image_to_renderer(
                     address_mode_w: wgpu::AddressMode::ClampToEdge,
                     mag_filter: wgpu::FilterMode::Linear,
                     min_filter: wgpu::FilterMode::Linear,
-                    mipmap_filter: wgpu::FilterMode::Linear,
+                    mipmap_filter: wgpu::MipmapFilterMode::Linear,
                     lod_min_clamp: 0.0,
                     lod_max_clamp: 100.0,
                     compare: None,
@@ -617,7 +582,9 @@ impl Plugin for ImguiPlugin {
         let display_scale = {
             let mut system_state: SystemState<Query<&Window, With<PrimaryWindow>>> =
                 SystemState::new(app.world_mut());
-            let primary_window = system_state.get(app.world());
+            let primary_window = system_state
+                .get(app.world())
+                .expect("Failed to get window query");
             primary_window.single().unwrap().scale_factor()
         };
 
@@ -641,7 +608,9 @@ impl Plugin for ImguiPlugin {
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             let mut system_state: SystemState<(Res<RenderDevice>, Res<RenderQueue>)> =
                 SystemState::new(render_app.world_mut());
-            let (device, queue) = system_state.get_mut(render_app.world_mut());
+            let (device, queue) = system_state
+                .get_mut(render_app.world_mut())
+                .expect("Failed to get render device and queue");
 
             // Here we create a new ImGui renderer with a default format. At this point,
             // we don't know what format the window surface is going to be set up with,
@@ -660,28 +629,6 @@ impl Plugin for ImguiPlugin {
                 &queue,
             );
 
-            render_app.add_render_graph_node::<ImguiNode>(Core2d, ImguiNodeLabel);
-
-            render_app.add_render_graph_edges(Core2d, (Node2d::EndMainPass, ImguiNodeLabel));
-
-            render_app.add_render_graph_edges(
-                Core2d,
-                (Node2d::EndMainPassPostProcessing, ImguiNodeLabel),
-            );
-
-            render_app.add_render_graph_edges(Core2d, (Node2d::Upscaling, ImguiNodeLabel));
-
-            render_app.add_render_graph_node::<ImguiNode>(Core3d, ImguiNodeLabel);
-
-            render_app.add_render_graph_edges(Core3d, (Node3d::EndMainPass, ImguiNodeLabel));
-
-            render_app.add_render_graph_edges(
-                Core3d,
-                (Node3d::EndMainPassPostProcessing, ImguiNodeLabel),
-            );
-
-            render_app.add_render_graph_edges(Core3d, (Node3d::Upscaling, ImguiNodeLabel));
-
             render_app.insert_resource(ImguiRenderContext {
                 renderer: RwLock::new(renderer),
                 draw: OwnedDrawDataWrap::default(),
@@ -689,18 +636,20 @@ impl Plugin for ImguiPlugin {
                 textures_to_remove: Vec::new(),
             });
 
-            render_app.world_mut().insert_non_send_resource(NonSendHack);
+            render_app.world_mut().insert_non_send(NonSendHack);
 
             render_app.add_systems(ExtractSchedule, imgui_extract_frame_system);
             render_app.add_systems(
                 Render,
-                imgui_update_textures_system.in_set(RenderSystems::Prepare),
+                (imgui_update_textures_system.in_set(RenderSystems::Prepare),),
             );
+            render_app.add_systems(Core3d, imgui_render_system.after(upscaling));
+            render_app.add_systems(Core2d, imgui_render_system.after(upscaling));
         } else {
             return;
         }
 
-        app.insert_non_send_resource(context);
+        app.insert_non_send(context);
 
         app.add_systems(PreUpdate, imgui_new_frame_system);
         app.add_systems(Last, imgui_end_frame_system);
@@ -711,12 +660,12 @@ fn imgui_new_frame_system(
     mut context: NonSendMut<ImguiContext>,
     primary_window: Query<(Entity, &Window), With<PrimaryWindow>>,
     keyboard: Res<ButtonInput<KeyCode>>,
-    mouse: Res<ButtonInput<bevy::input::mouse::MouseButton>>,
+    mouse: Res<ButtonInput<MouseButton>>,
     mut received_chars: MessageReader<KeyboardInput>,
-    mut mouse_wheel: MessageReader<bevy::input::mouse::MouseWheel>,
+    mut mouse_wheel: MessageReader<MouseWheel>,
 ) {
     const UNKNOWN_KEYCODE: KeyCode = KeyCode::F35;
-    const IMGUI_TO_BEVY_KEYS: [bevy::input::keyboard::KeyCode; imgui::Key::COUNT] = [
+    const IMGUI_TO_BEVY_KEYS: [KeyCode; imgui::Key::COUNT] = [
         KeyCode::Tab,
         KeyCode::ArrowLeft,
         KeyCode::ArrowRight,
@@ -873,9 +822,9 @@ fn imgui_new_frame_system(
             }
         }
 
-        io.mouse_down[0] = mouse.pressed(bevy::input::mouse::MouseButton::Left);
-        io.mouse_down[1] = mouse.pressed(bevy::input::mouse::MouseButton::Right);
-        io.mouse_down[2] = mouse.pressed(bevy::input::mouse::MouseButton::Middle);
+        io.mouse_down[0] = mouse.pressed(MouseButton::Left);
+        io.mouse_down[1] = mouse.pressed(MouseButton::Right);
+        io.mouse_down[2] = mouse.pressed(MouseButton::Middle);
 
         for e in received_chars.read() {
             if e.state == ButtonState::Pressed {
