@@ -34,6 +34,7 @@ jobs:
             const openIssues = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
+              state: 'all',
               per_page: 100,
             });
             const existingIssue = openIssues.find((issue) => {
