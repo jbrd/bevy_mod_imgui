@@ -1,0 +1,63 @@
+name: Check Bevy upstream releases
+
+permissions:
+  issues: write
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+jobs:
+  check-bevy-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v9
+        env:
+          BEVY_REPO: bevyengine/bevy
+          ISSUE_TITLE_PREFIX: Update Bevy to
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const upstreamRepo = process.env.BEVY_REPO;
+            const titlePrefix = process.env.ISSUE_TITLE_PREFIX || 'Update Bevy to';
+            if (!upstreamRepo || !/^.+\/.+$/.test(upstreamRepo.trim())) {
+              throw new Error(`BEVY_REPO must be set as owner/repo, got: '${upstreamRepo}'`);
+            }
+            const [upstreamOwner, upstreamRepoName] = upstreamRepo.trim().split('/');
+            const release = await github.rest.repos.getLatestRelease({
+              owner: upstreamOwner,
+              repo: upstreamRepoName,
+            });
+            const tag = release.data.tag_name;
+            const issueTitle = `${titlePrefix} ${tag}`;
+            const openIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const existingIssue = openIssues.find((issue) => {
+              return issue.title === issueTitle ||
+                     issue.title.includes(tag) ||
+                     issue.title.toLowerCase().includes('update bevy');
+            });
+            if (existingIssue) {
+              core.info(`Skipped creating issue; an open issue already exists (#${existingIssue.number}): ${existingIssue.title}`);
+              return;
+            }
+            const body = [
+              `The upstream Bevy repository (${upstreamRepo}) has published a new release: **${tag}**.`,
+              '',
+              `- Release: ${release.data.html_url}`,
+              '',
+              'Please update this repository to target the new Bevy version.',
+            ].join('\n');
+            const newIssue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body,
+            });
+            core.info(`Created issue #${newIssue.data.number}`);
+            return newIssue.data.html_url;
