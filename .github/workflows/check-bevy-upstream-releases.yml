@@ -39,8 +39,7 @@ jobs:
             });
             const existingIssue = openIssues.find((issue) => {
               return issue.title === issueTitle ||
-                     issue.title.includes(tag) ||
-                     issue.title.toLowerCase().includes('update bevy');
+                     issue.title.includes(tag);
             });
             if (existingIssue) {
               core.info(`Skipped creating issue; an open issue already exists (#${existingIssue.number}): ${existingIssue.title}`);
