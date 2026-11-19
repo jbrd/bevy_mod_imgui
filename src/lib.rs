@@ -110,7 +110,7 @@ use bevy::{
         render_asset::RenderAssets,
         renderer::{RenderContext, RenderDevice, RenderQueue},
         texture::GpuImage,
-        view::ExtractedWindows,
+        view::ExtractedWindow,
         Extract, Render, RenderApp, RenderSystems,
     },
     window::PrimaryWindow,
@@ -308,12 +308,9 @@ fn imgui_render_system(
     mut render_context: RenderContext,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
-    extracted_windows: Res<ExtractedWindows>,
+    primary_window: Query<&ExtractedWindow, With<PrimaryWindow>>,
 ) {
-    let Some(primary) = extracted_windows.primary else {
-        return; // No primary window
-    };
-    let Some(extracted_window) = extracted_windows.windows.get(&primary) else {
+    let Ok(extracted_window) = primary_window.single() else {
         return; // No primary window
     };
     let Some(swap_chain_texture_view) = extracted_window.swap_chain_texture_view.as_ref() else {
@@ -881,7 +878,7 @@ fn imgui_extract_frame_system(
     primary_window: Extract<Query<&Window, With<PrimaryWindow>>>,
     mut imgui_context: Extract<NonSend<ImguiContext>>,
     mut render_context: ResMut<ImguiRenderContext>,
-    extracted_windows: ResMut<ExtractedWindows>,
+    extracted_primary_window: Query<&ExtractedWindow, With<PrimaryWindow>>,
     device: Res<RenderDevice>,
     queue: ResMut<RenderQueue>,
     images: Extract<Res<Assets<Image>>>,
@@ -920,10 +917,7 @@ fn imgui_extract_frame_system(
     };
 
     // Determine the current texture format of the primary window
-    let Some(primary) = extracted_windows.primary else {
-        return;
-    };
-    let Some(extracted_window) = extracted_windows.windows.get(&primary) else {
+    let Ok(extracted_window) = extracted_primary_window.single() else {
         return;
     };
     let Some(texture_format) = extracted_window.swap_chain_texture_format else {
