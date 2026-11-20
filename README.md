@@ -60,7 +60,7 @@ The following examples are provided:
 
 ## Changelog
 
-* `0.11.0` - Update to wgpu `30.0`, Bevy `0.20.0`
+* `0.11.0` - Update to wgpu `30.0`, Bevy `0.20.0`. Added x11 dev dependency so that examples can run on Linux
 * `0.10.0` - Update to wgpu `29.0`, Bevy `0.19.0`
 * `0.9.0` - Update to wgpu `27.0`, Bevy `0.18.0`. Textures now maintain settings from Bevy `ImageSampler`
 * `0.8.0` - Add `docking` feature. Update to wgpu `26.0`, Bevy `0.17.0`. Fix render glitch when texture format / display scale is changed.
